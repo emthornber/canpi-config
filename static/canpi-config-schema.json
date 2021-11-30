@@ -48,7 +48,8 @@
       "prompt": { "$ref": "#/definitions/prompt" },
       "tooltip": { "$ref": "#/definitions/tooltip" },
       "default": { "$ref": "#/definitions/default" },
-      "format": { "$ref": "#/definitions/format" }
+      "format": { "$ref": "#/definitions/format" },
+      "action": { "$ref": "#/definitions/action" }
     }
   },
   "Wifi": {
@@ -58,7 +59,8 @@
       "prompt": { "$ref": "#/definitions/prompt" },
       "tooltip": { "$ref": "#/definitions/tooltip" },
       "default": { "$ref": "#/definitions/default" },
-      "format": { "$ref": "#/definitions/format" }
+      "format": { "$ref": "#/definitions/format" },
+      "action": { "$ref": "#/definitions/action" }
     }
   }
 }

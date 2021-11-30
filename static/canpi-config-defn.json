@@ -1,5 +1,5 @@
 {
-  "CBUS": [
+  "cbus": [
     {
       "attribute": "canid",
       "prompt": "CAN Id",
@@ -31,5 +31,11 @@
       "default": "0",
       "action": "Hidden"
     }
+  ],
+  "general": [
+
+  ],
+  "wifi": [
+
   ]
 }
