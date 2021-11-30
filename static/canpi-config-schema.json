@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CanPi Config Schema",
+  "definitions": {
+    "attribute": {
+      "type": "string",
+      "description": "Name to be used in structs"
+    },
+    "prompt": {
+      "type": "string",
+      "description": "Prompt to be used on web page"
+    },
+    "tooltip": {
+      "type": "string",
+      "description": "Description of attribute"
+    },
+    "default": {
+      "type": "string",
+      "description": "Default value of attribute"
+    },
+    "format": {
+      "type": "string",
+      "description": "Validation regular expression"
+    },
+    "action": {
+      "enum": [
+        "Edit",
+        "Display",
+        "Hidden"
+      ]
+    }
+  },
+  "CBUS": {
+    "type": "object",
+    "properties": {
+      "attribute": { "$ref": "#/definitions/attribute" },
+      "prompt": { "$ref": "#/definitions/prompt" },
+      "tooltip": { "$ref": "#/definitions/tooltip" },
+      "default": { "$ref": "#/definitions/default" },
+      "format": { "$ref": "#/definitions/format" },
+      "action": { "$ref": "#/definitions/action" }
+    }
+  },
+  "General": {
+    "type": "object",
+    "properties": {
+      "attribute": { "$ref": "#/definitions/attribute" },
+      "prompt": { "$ref": "#/definitions/prompt" },
+      "tooltip": { "$ref": "#/definitions/tooltip" },
+      "default": { "$ref": "#/definitions/default" },
+      "format": { "$ref": "#/definitions/format" }
+    }
+  },
+  "Wifi": {
+    "type": "object",
+    "properties": {
+      "attribute": { "$ref": "#/definitions/attribute" },
+      "prompt": { "$ref": "#/definitions/prompt" },
+      "tooltip": { "$ref": "#/definitions/tooltip" },
+      "default": { "$ref": "#/definitions/default" },
+      "format": { "$ref": "#/definitions/format" }
+    }
+  }
+}

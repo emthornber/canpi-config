@@ -1,0 +1,35 @@
+{
+  "CBUS": [
+    {
+      "attribute": "canid",
+      "prompt": "CAN Id",
+      "tooltip": "The CAN Id used by the CAN Pi CAP/Zero on the CBUS",
+      "default": "100",
+      "format": "[0-9]{1,4}",
+      "action": "Display"
+    },
+    {
+      "attribute": "node_number",
+      "prompt": "Node Number",
+      "tooltip": "Module Node Number - change your peril",
+      "default": "4321",
+      "format": "[0-9]{1,4}",
+      "action": "Display"
+    },
+    {
+      "attribute": "start_event_id",
+      "prompt": "Start Event Id",
+      "tooltip": "The event that will be generated when the ED and GridConnect services start (ON) and stop (OFF)",
+      "default": "1",
+      "format": "[0-9]{1,2}",
+      "action": "Edit"
+    },
+    {
+      "attribute":"node_mode",
+      "prompt": "",
+      "tooltip": "",
+      "default": "0",
+      "action": "Hidden"
+    }
+  ]
+}
