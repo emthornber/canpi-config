@@ -1,66 +1,78 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "CanPi Config Schema",
-  "definitions": {
-    "attribute": {
+    "type": "object",
+    "properties": {
+      "Item": {
+        "$ref": "#/$defs/Item"
+      }
+  },
+  "$defs": {
+    "Name": {
       "type": "string",
       "description": "Name to be used in structs"
     },
-    "prompt": {
+    "Prompt": {
       "type": "string",
       "description": "Prompt to be used on web page"
     },
-    "tooltip": {
+    "Tooltip": {
       "type": "string",
       "description": "Description of attribute"
     },
-    "default": {
+    "Current": {
+      "type": "string",
+      "description": "Current value of attribute"
+    },
+    "Default": {
       "type": "string",
       "description": "Default value of attribute"
     },
-    "format": {
+    "Format": {
       "type": "string",
       "description": "Validation regular expression"
     },
-    "action": {
+    "Action": {
       "enum": [
         "Edit",
         "Display",
         "Hidden"
       ]
-    }
-  },
-  "CBUS": {
-    "type": "object",
-    "properties": {
-      "attribute": { "$ref": "#/definitions/attribute" },
-      "prompt": { "$ref": "#/definitions/prompt" },
-      "tooltip": { "$ref": "#/definitions/tooltip" },
-      "default": { "$ref": "#/definitions/default" },
-      "format": { "$ref": "#/definitions/format" },
-      "action": { "$ref": "#/definitions/action" }
-    }
-  },
-  "General": {
-    "type": "object",
-    "properties": {
-      "attribute": { "$ref": "#/definitions/attribute" },
-      "prompt": { "$ref": "#/definitions/prompt" },
-      "tooltip": { "$ref": "#/definitions/tooltip" },
-      "default": { "$ref": "#/definitions/default" },
-      "format": { "$ref": "#/definitions/format" },
-      "action": { "$ref": "#/definitions/action" }
-    }
-  },
-  "Wifi": {
-    "type": "object",
-    "properties": {
-      "attribute": { "$ref": "#/definitions/attribute" },
-      "prompt": { "$ref": "#/definitions/prompt" },
-      "tooltip": { "$ref": "#/definitions/tooltip" },
-      "default": { "$ref": "#/definitions/default" },
-      "format": { "$ref": "#/definitions/format" },
-      "action": { "$ref": "#/definitions/action" }
+    },
+    "Attributes": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "$ref": "#/$defs/Prompt"
+        },
+        "tooltip": {
+          "$ref": "#/$defs/Tooltip"
+        },
+        "current": {
+          "$ref": "#/$defs/Current"
+        },
+        "default": {
+          "$ref": "#/$defs/Default"
+        },
+        "format": {
+          "$ref": "#/$defs/Format"
+        },
+        "action": {
+          "$ref": "#/$defs/Action"
+        }
+      }
+    },
+    "Item": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/Name"
+        },
+        "attributes": {
+          "$ref": "#/$defs/Attributes"
+        }
+      }
     }
   }
 }
+

@@ -9,21 +9,23 @@
 //  30 November, 2021 - E M Thornber
 //
 
-use serde::{Deserialize};
-use serde_json::{Error, Result, Value, from_str};
+use serde::Deserialize;
+use serde_json::Result;
+use serde_json::Value;
 
-#[derive(Deserialize)]
+use std::collections::HashMap;
+
+#[derive(Deserialize, Debug)]
 struct Config {
-    cbus: Vec<Attribute>,
-    general: Vec<Attribute>,
-    wifi: Vec<Attribute>,
+    #[serde(flatten)]
+    map: HashMap<String, Attribute>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct Attribute {
-    attribute: String,
     prompt: String,
     tooltip: String,
+    current: String,
     default: String,
     format: String,
     action: String,
@@ -31,14 +33,15 @@ struct Attribute {
 
 impl Config {
     pub fn new(data: &str) -> Result<Config> {
-        let c = serde_json::from_str( data);
-        let mut c = match c {
-            Ok(config) => return config,
-            Err(e) => return Err(e),
+        let c = serde_json::from_str(data);
+        let c = match c {
+            Ok(hash) => hash,
+            Err(e) => panic!("Problem deserializing config file: {:?}", e),
         };
+        Ok(c)
     }
-
 }
+
 #[cfg(test)]
 mod tests {
     use crate::{Attribute, Config};
@@ -49,9 +52,9 @@ mod tests {
         // Some JSON input data as a &str.  Maybe this comes from a file.
         let data = r#"
         {
-            "attribute": "canid",
             "prompt": "CAN Id",
             "tooltip": "The CAN Id used by the CAN Pi CAP/Zero on the CBUS",
+            "current": "100",
             "default": "100",
             "format": "[0-9]{1,4}",
             "action": "Display"
@@ -61,7 +64,7 @@ mod tests {
         let a: Attribute = serde_json::from_str(data)?;
 
         // println!("Attribute is {} ({})", a.attribute, a.tooltip);
-        assert_eq!(a.attribute, "canid");
+        assert_eq!(a.action, "Display");
         Ok(())
     }
 
@@ -69,46 +72,40 @@ mod tests {
     fn single_vector() {
         let data = r#"
         {
-            "cbus": [
-                {
-                  "attribute": "canid",
-                  "prompt": "CAN Id",
-                  "tooltip": "The CAN Id used by the CAN Pi CAP/Zero on the CBUS",
-                  "default": "100",
-                  "format": "[0-9]{1,4}",
-                  "action": "Display"
-                },
-                {
-                  "attribute": "node_number",
-                  "prompt": "Node Number",
-                  "tooltip": "Module Node Number - change your peril",
-                  "default": "4321",
-                  "format": "[0-9]{1,4}",
-                  "action": "Display"
-                },
-                {
-                  "attribute": "start_event_id",
-                  "prompt": "Start Event Id",
-                  "tooltip": "The event that will be generated when the ED and GridConnect services start (ON) and stop (OFF)",
-                  "default": "1",
-                  "format": "[0-9]{1,2}",
-                  "action": "Edit"
-                },
-                {
-                  "attribute":"node_mode",
-                  "prompt": "",
-                  "tooltip": "",
-                  "default": "0",
-                  "format": "[0-9]{1,2}",
-                  "action": "Hidden"
-                }
-            ],
-            "general": [],
-            "wifi": []
+                  "canid" : {
+                      "prompt": "CAN Id",
+                      "tooltip": "The CAN Id used by the CAN Pi CAP/Zero on the CBUS",
+                      "current": "100",
+                      "default": "100",
+                      "format": "[0-9]{1,4}",
+                      "action": "Display"
+                  },
+                  "node_number" : {
+                      "prompt": "Node Number",
+                      "tooltip": "Module Node Number - change your peril",
+                      "current": "4321",
+                      "default": "4321",
+                      "format": "[0-9]{1,4}",
+                      "action": "Display"
+                  },
+                  "start_event_id" : {
+                      "prompt": "Start Event Id",
+                      "tooltip": "The event that will be generated when the ED and GridConnect services start (ON) and stop (OFF)",
+                      "current": "1",
+                      "default": "1",
+                      "format": "[0-9]{1,2}",
+                      "action": "Edit"
+                  },
+                  "node_mode" : {
+                      "prompt": "",
+                      "tooltip": "",
+                      "current": "0",
+                      "default": "0",
+                      "format": "[0-9]{1,2}",
+                      "action": "Hidden"
+                  }
         }"#;
         let mut config: Config = Config::new(&data).expect("Deserialize failed");
-        assert_eq!(config.cbus.len(), 4);
-        assert_eq!(config.general.len(), 0);
-        assert_eq!(config.wifi.len(), 0);
+        assert_eq!(config.map.len(), 4);
     }
 }
