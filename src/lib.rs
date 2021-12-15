@@ -18,6 +18,12 @@ use std::collections::HashMap;
 
 type ConfigHash = HashMap<String, Attribute>;
 
+#[derive(Clone, Deserialize, Debug, PartialEq)]
+pub enum AttributeAction {
+    Edit,
+    Display,
+    Hide,
+}
 #[derive(Clone, Deserialize, Debug)]
 pub struct Attribute {
     prompt: String,
@@ -25,10 +31,11 @@ pub struct Attribute {
     current: String,
     default: String,
     format: String,
-    action: String,
+    action: AttributeAction,
 }
 
-pub fn read_definition(data: &str) -> Result<ConfigHash> {
+pub fn read_defn_file(file_path: )
+pub fn read_defn_str(data: &str) -> Result<ConfigHash> {
     let c = serde_json::from_str(data);
     let c = match c {
         Ok(hash) => hash,
@@ -37,9 +44,9 @@ pub fn read_definition(data: &str) -> Result<ConfigHash> {
     Ok(c)
 }
 
-pub fn attr_with_action(
+pub fn attributes_with_action(
     attrs: ConfigHash,
-    action: String
+    action: AttributeAction
 ) -> ConfigHash {
     let mut attr2 = ConfigHash::new();
     attr2.extend(attrs
@@ -52,7 +59,7 @@ pub fn attr_with_action(
 
 #[cfg(test)]
 mod tests {
-    use crate::{Attribute, ConfigHash, read_definition, attr_with_action};
+    use crate::{Attribute, ConfigHash, AttributeAction, read_defn_str, attributes_with_action};
     use serde_json::Result;
 
     #[test]
@@ -72,7 +79,7 @@ mod tests {
         let a: Attribute = serde_json::from_str(data)?;
 
         // println!("Attribute is {} ({})", a.attribute, a.tooltip);
-        assert_eq!(a.action, "Display");
+        assert_eq!(a.action, AttributeAction::Display);
         Ok(())
     }
 
@@ -110,16 +117,16 @@ mod tests {
                       "current": "0",
                       "default": "0",
                       "format": "[0-9]{1,2}",
-                      "action": "Hidden"
+                      "action": "Hide"
                   }
         }"#;
-        let config: ConfigHash = read_definition(data).expect("Deserialize failed");
+        let config: ConfigHash = read_defn_str(data).expect("Deserialize failed");
         assert_eq!(config.len(), 4);
-        let displayable: ConfigHash = attr_with_action(config.clone(), "Display".to_string());
+        let displayable: ConfigHash = attributes_with_action(config.clone(), AttributeAction::Display);
         assert_eq!(displayable.len(), 2);
-        let editable: ConfigHash = attr_with_action(config.clone(), "Edit".to_string());
+        let editable: ConfigHash = attributes_with_action(config.clone(), AttributeAction::Edit);
         assert_eq!(editable.len(), 1);
-        let hidden: ConfigHash = attr_with_action(config.clone(), "Hidden".to_string());
+        let hidden: ConfigHash = attributes_with_action(config.clone(), AttributeAction::Hide);
         assert_eq!(hidden.len(), 1);
     }
 }

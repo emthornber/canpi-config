@@ -29,7 +29,7 @@
     "current": "0",
     "default": "0",
     "format": "[0-9]{1}",
-    "action": "Hidden"
+    "action": "Hide"
   },
   "can_grid": {
     "prompt": "Enable GridConnect service",
@@ -37,7 +37,7 @@
     "current": "Y",
     "default": "Y",
     "format": "[Yy]|[Nn]",
-    "action": "Hidden"
+    "action": "Hide"
   },
   "edserver": {
     "prompt": "Enable Throttle service",
@@ -45,7 +45,7 @@
     "current": "Y",
     "default": "Y",
     "format": "[Yy]|[Nn]",
-    "action": "Hidden"
+    "action": "Hide"
   },
   "candevice": {
     "prompt": "",
@@ -53,7 +53,7 @@
     "current": "can0",
     "default": "can0",
     "format": "[[:alnum:]]{4,}",
-    "action": "Hidden"
+    "action": "Hide"
   },
   "cangrid_port": {
     "prompt": "GridConnect Port",
@@ -69,7 +69,7 @@
     "current": "0",
     "default": "0",
     "format": "[0-9]{1}",
-    "action": "Hidden"
+    "action": "Hide"
   },
   "fn_momentary": {
     "prompt": "",
@@ -77,7 +77,7 @@
     "current": "0",
     "default": "0",
     "format": "[0-9]{1}",
-    "action": "Hidden"
+    "action": "Hide"
   },
   "button_pin": {
     "prompt": "Button GPIO Pin",
@@ -117,7 +117,7 @@
     "current": "0",
     "default": "0",
     "format": "[0-9]{1}",
-    "action": "Hidden"
+    "action": "Hide"
   },
   "logfile": {
     "prompt": "",
@@ -125,7 +125,7 @@
     "current": "0",
     "default": "0",
     "format": "[0-9]{1}",
-    "action": "Hidden"
+    "action": "Hide"
   },
   "loglevel": {
     "prompt": "Set the amount of detail in the log file",
@@ -141,7 +141,7 @@
     "current": "0",
     "default": "0",
     "format": "[0-9]{1}",
-    "action": "Hidden"
+    "action": "Hide"
   },
   "tcpport": {
     "prompt": "Throttle Service port",
@@ -157,7 +157,7 @@
     "current": "0",
     "default": "0",
     "format": "[0-9]{1}",
-    "action": "Hidden"
+    "action": "Hide"
   },
   "shutdown_code": {
     "prompt": "",
@@ -165,7 +165,7 @@
     "current": "0",
     "default": "0",
     "format": "[0-9]{1}",
-    "action": "Hidden"
+    "action": "Hide"
   },
   "orphan_timeout": {
     "prompt": "",
@@ -173,7 +173,7 @@
     "current": "0",
     "default": "0",
     "format": "[0-9]{1}",
-    "action": "Hidden"
+    "action": "Hide"
   },
   "ap_channel": {
     "prompt": "AP Channel",
@@ -189,7 +189,7 @@
     "current": "0",
     "default": "0",
     "format": "[0-9]{1}",
-    "action": "Hidden"
+    "action": "Hide"
   },
   "ap_no_password": {
     "prompt": "",
@@ -197,7 +197,7 @@
     "current": "0",
     "default": "0",
     "format": "[0-9]{1}",
-    "action": "Hidden"
+    "action": "Hide"
   },
   "ap_password": {
     "prompt": "",
@@ -205,7 +205,7 @@
     "current": "0",
     "default": "0",
     "format": "[[:alnum:]]{1,}",
-    "action": "Hidden"
+    "action": "Hide"
   },
   "ap_ssid": {
     "prompt": "AP SSID",
@@ -229,6 +229,6 @@
     "current": "bKFcLGgAW6fV",
     "default": "bKFcLGgAW6fV",
     "format": "[[:alnum:]]{1,}",
-    "action": "Hidden"
+    "action": "Hide"
   }
 }
