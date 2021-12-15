@@ -4,25 +4,22 @@
 // There is a JSON file that defines the configuration file format and default values along with a
 // matching schema file.
 //
-// There are functions to read and write the config as an INI file with sections
+// There are functions to read and write the config as an INI file
 //
 //  30 November, 2021 - E M Thornber
 //
 
+//use serde::de::value::MapAccessDeserializer;
 use serde::Deserialize;
 use serde_json::Result;
 use serde_json::Value;
 
 use std::collections::HashMap;
 
-#[derive(Deserialize, Debug)]
-struct Config {
-    #[serde(flatten)]
-    map: HashMap<String, Attribute>,
-}
+type ConfigHash = HashMap<String, Attribute>;
 
-#[derive(Deserialize, Debug)]
-struct Attribute {
+#[derive(Clone, Deserialize, Debug)]
+pub struct Attribute {
     prompt: String,
     tooltip: String,
     current: String,
@@ -31,20 +28,31 @@ struct Attribute {
     action: String,
 }
 
-impl Config {
-    pub fn new(data: &str) -> Result<Config> {
-        let c = serde_json::from_str(data);
-        let c = match c {
-            Ok(hash) => hash,
-            Err(e) => panic!("Problem deserializing config file: {:?}", e),
-        };
-        Ok(c)
-    }
+pub fn read_definition(data: &str) -> Result<ConfigHash> {
+    let c = serde_json::from_str(data);
+    let c = match c {
+        Ok(hash) => hash,
+        Err(e) => panic!("Problem deserializing config definition file: {:?}", e),
+    };
+    Ok(c)
+}
+
+pub fn attr_with_action(
+    attrs: ConfigHash,
+    action: String
+) -> ConfigHash {
+    let mut attr2 = ConfigHash::new();
+    attr2.extend(attrs
+        .iter()
+        .filter(|(_k, v)| v.action == action)
+        .map(|(k, v)| (k.clone(), v.clone()))
+    );
+    attr2
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{Attribute, Config};
+    use crate::{Attribute, ConfigHash, read_definition, attr_with_action};
     use serde_json::Result;
 
     #[test]
@@ -105,7 +113,13 @@ mod tests {
                       "action": "Hidden"
                   }
         }"#;
-        let mut config: Config = Config::new(&data).expect("Deserialize failed");
-        assert_eq!(config.map.len(), 4);
+        let config: ConfigHash = read_definition(data).expect("Deserialize failed");
+        assert_eq!(config.len(), 4);
+        let displayable: ConfigHash = attr_with_action(config.clone(), "Display".to_string());
+        assert_eq!(displayable.len(), 2);
+        let editable: ConfigHash = attr_with_action(config.clone(), "Edit".to_string());
+        assert_eq!(editable.len(), 1);
+        let hidden: ConfigHash = attr_with_action(config.clone(), "Hidden".to_string());
+        assert_eq!(hidden.len(), 1);
     }
 }

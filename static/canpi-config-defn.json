@@ -1,33 +1,234 @@
 {
-    "canid" : {
-      "prompt": "CAN Id",
-      "tooltip": "The CAN Id used by the CAN Pi CAP/Zero on the CBUS",
-      "current": "100",
-      "default": "100",
-      "format": "[0-9]{1,4}",
-      "action": "Display"
-    },
-    "node_number" : {
-      "prompt": "Node Number",
-      "tooltip": "Module Node Number - change your peril",
-      "current": "4321",
-      "default": "4321",
-      "format": "[0-9]{1,4}",
-      "action": "Display"
-    },
-    "start_event_id" : {
-      "prompt": "Start Event Id",
-      "tooltip": "The event that will be generated when the ED and GridConnect services start (ON) and stop (OFF)",
-      "current": "1",
-      "default": "1",
-      "format": "[0-9]{1,2}",
-      "action": "Edit"
-    },
-    "node_mode" : {
-      "prompt": "",
-      "tooltip": "",
-      "current": "0",
-      "default": "0",
-      "action": "Hidden"
-    }
+  "canid": {
+    "prompt": "CAN Id",
+    "tooltip": "The CAN Id used by the CAN Pi CAP/Zero on the CBUS",
+    "current": "100",
+    "default": "100",
+    "format": "[0-9]{1,4}",
+    "action": "Display"
+  },
+  "node_number": {
+    "prompt": "Node Number",
+    "tooltip": "Module Node Number - change your peril",
+    "current": "4321",
+    "default": "4321",
+    "format": "[0-9]{1,4}",
+    "action": "Display"
+  },
+  "start_event_id": {
+    "prompt": "Start Event Id",
+    "tooltip": "The event that will be generated when the ED and GridConnect services start (ON) and stop (OFF)",
+    "current": "1",
+    "default": "1",
+    "format": "[0-9]{1,2}",
+    "action": "Edit"
+  },
+  "node_mode": {
+    "prompt": "",
+    "tooltip": "",
+    "current": "0",
+    "default": "0",
+    "format": "[0-9]{1}",
+    "action": "Hidden"
+  },
+  "can_grid": {
+    "prompt": "Enable GridConnect service",
+    "tooltip": "Enter Y(es) or N(o)",
+    "current": "Y",
+    "default": "Y",
+    "format": "[Yy]|[Nn]",
+    "action": "Hidden"
+  },
+  "edserver": {
+    "prompt": "Enable Throttle service",
+    "tooltip": "Enter Y(es) or N(o)",
+    "current": "Y",
+    "default": "Y",
+    "format": "[Yy]|[Nn]",
+    "action": "Hidden"
+  },
+  "candevice": {
+    "prompt": "",
+    "tooltip": "",
+    "current": "can0",
+    "default": "can0",
+    "format": "[[:alnum:]]{4,}",
+    "action": "Hidden"
+  },
+  "cangrid_port": {
+    "prompt": "GridConnect Port",
+    "tooltip": "TCP port that the GridConnect service listens on",
+    "current": "5550",
+    "default": "5550",
+    "format": "[0-9]{4}",
+    "action": "Edit"
+  },
+  "create_log_file": {
+    "prompt": "",
+    "tooltip": "",
+    "current": "0",
+    "default": "0",
+    "format": "[0-9]{1}",
+    "action": "Hidden"
+  },
+  "fn_momentary": {
+    "prompt": "",
+    "tooltip": "",
+    "current": "0",
+    "default": "0",
+    "format": "[0-9]{1}",
+    "action": "Hidden"
+  },
+  "button_pin": {
+    "prompt": "Button GPIO Pin",
+    "tooltip": "",
+    "current": "17",
+    "default": "17",
+    "format": "[0-9]{2}",
+    "action": "Display"
+  },
+  "green_led_pin": {
+    "prompt": "Green LED GPIO Pin",
+    "tooltip": "",
+    "current": "24",
+    "default": "24",
+    "format": "[0-9]{2}",
+    "action": "Display"
+  },
+  "yellow_led_pin": {
+    "prompt": "Yellow LED GPIO Pin",
+    "tooltip": "",
+    "current": "23",
+    "default": "23",
+    "format": "[0-9]{2}",
+    "action": "Display"
+  },
+  "red_led_pin": {
+    "prompt": "Red LED GPIO Pin",
+    "tooltip": "",
+    "current": "22",
+    "default": "22",
+    "format": "[0-9]{2}",
+    "action": "Display"
+  },
+  "logappend": {
+    "prompt": "",
+    "tooltip": "",
+    "current": "0",
+    "default": "0",
+    "format": "[0-9]{1}",
+    "action": "Hidden"
+  },
+  "logfile": {
+    "prompt": "",
+    "tooltip": "",
+    "current": "0",
+    "default": "0",
+    "format": "[0-9]{1}",
+    "action": "Hidden"
+  },
+  "loglevel": {
+    "prompt": "Set the amount of detail in the log file",
+    "tooltip": "Levels are INFO, WARN, DEBUG in increasing verboseness",
+    "current": "INFO",
+    "default": "INFO",
+    "format": "INFO|WARN|DEBUG",
+    "action": "Edit"
+  },
+  "service_name": {
+    "prompt": "",
+    "tooltip": "",
+    "current": "0",
+    "default": "0",
+    "format": "[0-9]{1}",
+    "action": "Hidden"
+  },
+  "tcpport": {
+    "prompt": "Throttle Service port",
+    "tooltip": "TCP port the Engine driver throttle service listens on",
+    "current": "5555",
+    "default": "5555",
+    "format": "[0-9]{4}",
+    "action": "Edit"
+  },
+  "turnout_file": {
+    "prompt": "",
+    "tooltip": "",
+    "current": "0",
+    "default": "0",
+    "format": "[0-9]{1}",
+    "action": "Hidden"
+  },
+  "shutdown_code": {
+    "prompt": "",
+    "tooltip": "",
+    "current": "0",
+    "default": "0",
+    "format": "[0-9]{1}",
+    "action": "Hidden"
+  },
+  "orphan_timeout": {
+    "prompt": "",
+    "tooltip": "",
+    "current": "0",
+    "default": "0",
+    "format": "[0-9]{1}",
+    "action": "Hidden"
+  },
+  "ap_channel": {
+    "prompt": "AP Channel",
+    "tooltip": "WiFi Channel (1 - 13) used in AP mode",
+    "current": "6",
+    "default": "6",
+    "format": "[0-9]{1,2}",
+    "action": "Edit"
+  },
+  "ap_mode": {
+    "prompt": "not needed",
+    "tooltip": "not needed",
+    "current": "0",
+    "default": "0",
+    "format": "[0-9]{1}",
+    "action": "Hidden"
+  },
+  "ap_no_password": {
+    "prompt": "",
+    "tooltip": "",
+    "current": "0",
+    "default": "0",
+    "format": "[0-9]{1}",
+    "action": "Hidden"
+  },
+  "ap_password": {
+    "prompt": "",
+    "tooltip": "",
+    "current": "0",
+    "default": "0",
+    "format": "[[:alnum:]]{1,}",
+    "action": "Hidden"
+  },
+  "ap_ssid": {
+    "prompt": "AP SSID",
+    "tooltip": "SSID of Access Point network",
+    "current": "HolywellTown",
+    "default": "HolywellTown",
+    "format": "[[:alnum:]]{1,}",
+    "action": "Edit"
+  },
+  "router_ssid": {
+    "prompt": "Router SSID",
+    "tooltip": "SSID of default WiFi network to use",
+    "current": "BTWholeHome-VFC",
+    "default": "BTWholeHome-VFC",
+    "format": "[[:alnum:]]{1,}",
+    "action": "Edit"
+  },
+  "router_password": {
+    "prompt": "Router Password",
+    "tooltip": "Password of default WiFi network to use",
+    "current": "bKFcLGgAW6fV",
+    "default": "bKFcLGgAW6fV",
+    "format": "[[:alnum:]]{1,}",
+    "action": "Hidden"
+  }
 }
