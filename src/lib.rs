@@ -12,9 +12,12 @@
 //use serde::de::value::MapAccessDeserializer;
 use serde::Deserialize;
 use serde_json::Result;
-use serde_json::Value;
+//use serde_json::Value;
 
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::BufReader;
+use std::path::Path;
 
 type ConfigHash = HashMap<String, Attribute>;
 
@@ -34,13 +37,34 @@ pub struct Attribute {
     action: AttributeAction,
 }
 
-pub fn read_defn_file(file_path: )
-pub fn read_defn_str(data: &str) -> Result<ConfigHash> {
-    let c = serde_json::from_str(data);
+pub fn read_defn_file<P: AsRef<Path>>(path: P) -> Result<ConfigHash> {
+    // Open the file in read-only mode with buffer
+    let file = File::open(path);
+    let file = match file {
+        Ok(f) => f,
+        Err(e) => panic!("Problem opening config definition file: {:?}", e),
+    };
+    let reader = BufReader::new(file);
+
+    // Read the JSON contents of the file as an instance of 'ConfigHash'.
+    let c: Result<ConfigHash> = serde_json::from_reader(reader);
     let c = match c {
         Ok(hash) => hash,
         Err(e) => panic!("Problem deserializing config definition file: {:?}", e),
     };
+
+    // Return the 'ConfigHash'.
+    Ok(c)
+}
+
+pub fn read_defn_str(data: &str) -> Result<ConfigHash> {
+    let c = serde_json::from_str(data);
+    let c = match c {
+        Ok(hash) => hash,
+        Err(e) => panic!("Problem deserializing config definition str: {:?}", e),
+    };
+
+    // Return the 'ConfigHash'.
     Ok(c)
 }
 
@@ -59,8 +83,17 @@ pub fn attributes_with_action(
 
 #[cfg(test)]
 mod tests {
-    use crate::{Attribute, ConfigHash, AttributeAction, read_defn_str, attributes_with_action};
+    use crate::{
+        Attribute,
+        AttributeAction,
+        ConfigHash,
+        attributes_with_action,
+        read_defn_str,
+        read_defn_file,
+    };
+    use dotenv::dotenv;
     use serde_json::Result;
+    use std::env;
 
     #[test]
     fn single_attribute() -> Result<()> {
@@ -128,5 +161,13 @@ mod tests {
         assert_eq!(editable.len(), 1);
         let hidden: ConfigHash = attributes_with_action(config.clone(), AttributeAction::Hide);
         assert_eq!(hidden.len(), 1);
+    }
+
+    #[test]
+    fn read_file() {
+        dotenv().ok();
+        let config_file = env::var("CONFIG_FILE").expect("CONFIG_FILE is not set in .env file");
+        let config: ConfigHash = read_defn_file(config_file).expect("Deserialize failed");
+        assert_eq!(config.len(), 29)
     }
 }
