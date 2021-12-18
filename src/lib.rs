@@ -1,10 +1,14 @@
-//
-// Configuration data manipulation
-//
-// There is a JSON file that defines the configuration file format and values (default & current)
-// along with a matching schema file.
-//
-// There are functions to read and write the config as an INI file
+//! # canpi-config
+//!
+//! This crate provides functionality to read and write the canpi server configuration
+//! and to define which configuration items can be changed or viewed by the user and which are hidden.
+//!
+//! There is a JSON file that defines the configuration item format and default values
+//! along with a matching schema file.  This file is loaded to the ConfigHash.  The canpi INI file,
+//! if it exists, is read to update current value of the configuration items so the ConfigHash
+//! becomes the single source of truth.
+//!
+//! There is a function to write the ConfigHash as an INI file.
 //
 //  30 November, 2021 - E M Thornber
 //
@@ -20,68 +24,75 @@ use std::path::Path;
 
 use thiserror::Error;
 
-type ConfigHash = HashMap<String, Attribute>;
+/// Type alias for a HashMap
+pub type ConfigHash = HashMap<String, Attribute>;
 
 #[derive(Clone, Deserialize, Debug, PartialEq)]
+/// Defines the possible behaviours of an attribute
 pub enum AttributeAction {
+    /// User can update the attribute value
     Edit,
+    /// User can see the current value of the attribute but cannot change it
     Display,
+    /// Attribute is for internal use only
     Hide,
 }
 
 #[derive(Clone, Deserialize, Debug)]
+/// Definition of an attribute
 pub struct Attribute {
+    // Text used to label edit box on form
     prompt: String,
+    // Text displayed when cursor hovers over edit box
     tooltip: String,
+    // Current value of attribute.  Used to populate .cfg file
     current: String,
+    // Default value of attribute
     default: String,
+    // Regular expression to validate user input
     format: String,
+    // How attribute behaves
     action: AttributeAction,
 }
 
 #[derive(Error, Debug)]
+/// Categorizes the cause of errors when processing the configuration files
 pub enum CanPiCfgError {
+    /// The error was caused by a failure to read the configuration file
     #[error("cannot open configuration file")]
-    IoError(#[from] std::io::Error),
+    Io(#[from] std::io::Error),
+    /// The error was caused by a failure to deserialize the JSON
     #[error("cannot deserialize configuration file")]
-    JsonError(#[from] serde_json::Error),
+    Json(#[from] serde_json::Error),
+    /// The error was cause when reading or writing the .cfg file
     #[error("cannot read cfg file")]
-    IniError(#[from] ini::Error),
+    Ini(#[from] ini::Error),
 }
 
+/// Read the contents of a file as JSON and load into an instance of 'ConfigHash'
 pub fn read_defn_file<P: AsRef<Path>>(path: P) -> Result<ConfigHash, CanPiCfgError> {
     // Open the file in read-only mode with buffer
     let file = File::open(path)?;
-    /*    let file = match file {
-            Ok(f) => f,
-            Err(e) => panic!("Problem opening config definition file: {:?}", e),
-        };*/
     let reader = BufReader::new(file);
 
     // Read the JSON contents of the file as an instance of 'ConfigHash'.
     let config = serde_json::from_reader(reader)?;
-    /*    let c = match c {
-            Ok(hash) => hash,
-            Err(e) => panic!("Problem deserializing config definition file: {:?}", e),
-        };*/
 
     // Return the 'ConfigHash'.
     Ok(config)
 }
 
+/// Read the contents of a string as JSON and load into an instance of 'ConfigHash'
 pub fn read_defn_str(data: &str) -> Result<ConfigHash, CanPiCfgError> {
     let config = serde_json::from_str(data)?;
-    /*    let c = match c {
-            Ok(hash) => hash,
-            Err(e) => panic!("Problem deserializing config definition str: {:?}", e),
-        };*/
 
     // Return the 'ConfigHash'.
     Ok(config)
 }
 
+/// Filters the attributes by action
 pub fn attributes_with_action(
-    attrs: ConfigHash,
+    attrs: &ConfigHash,
     action: AttributeAction,
 ) -> ConfigHash {
     let mut attr2 = ConfigHash::new();
@@ -93,31 +104,30 @@ pub fn attributes_with_action(
     attr2
 }
 
+/// Output the keys and current values of items to the file defined by 'path'
 pub fn write_cfg_file<P: AsRef<Path>>(path: P, config: ConfigHash) -> Result<(), CanPiCfgError> {
     let mut cfg = Ini::new();
     for (k, v) in config {
         cfg.set_to(None::<String>, k.clone(), v.current.clone());
     }
     cfg.write_to_file(path)?;
-    /*   let c = match c {
-           Ok(ini) => ini,
-           Err(e) => panic!("Problem writing cfg file: {:?}", e),
-       };*/
     Ok(())
 }
 
-pub fn update_current(mut a: Attribute, v: String) -> Attribute {
+fn update_current_value(mut a: Attribute, v: String) -> Attribute {
     a.current = v;
     a
 }
 
-pub fn update_config_from_cfg<P: AsRef<Path>>(path: P, config: ConfigHash) -> Result<ConfigHash, CanPiCfgError> {
+/// Read the INI format file 'path' and load the values into the 'current' field of the matching
+/// ConfigHash entry.
+pub fn update_defn_from_cfg<P: AsRef<Path>>(path: P, config: ConfigHash) -> Result<ConfigHash, CanPiCfgError> {
     let cfg = Ini::load_from_file(path)?;
     let mut c = config.clone();
     for (k, v) in cfg.general_section().iter() {
         let attr = config.get(k);
         if let Some(a) = attr {
-            c.insert(k.to_string(), update_current(a.clone(), v.to_string()));
+            c.insert(k.to_string(), update_current_value(a.clone(), v.to_string()));
         } else {
             println!("Key '{}' not defined in configuration", k);
         }
@@ -192,11 +202,11 @@ mod tests {
         }"#;
         let config: ConfigHash = read_defn_str(data).expect("Deserialize failed");
         assert_eq!(config.len(), 4);
-        let displayable: ConfigHash = attributes_with_action(config.clone(), AttributeAction::Display);
+        let displayable: ConfigHash = attributes_with_action(&config, AttributeAction::Display);
         assert_eq!(displayable.len(), 2);
-        let editable: ConfigHash = attributes_with_action(config.clone(), AttributeAction::Edit);
+        let editable: ConfigHash = attributes_with_action(&config, AttributeAction::Edit);
         assert_eq!(editable.len(), 1);
-        let hidden: ConfigHash = attributes_with_action(config.clone(), AttributeAction::Hide);
+        let hidden: ConfigHash = attributes_with_action(&config, AttributeAction::Hide);
         assert_eq!(hidden.len(), 1);
     }
 
