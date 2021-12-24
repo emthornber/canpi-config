@@ -211,18 +211,51 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
+    fn single_vector_2() {
+        let data = r#"
+        {
+                  "canid" : {
+                      "prompt": "CAN Id",
+                      "tooltip": "The CAN Id used by the CAN Pi CAP/Zero on the CBUS",
+                      "current": "100",
+                      "default": "100",
+                      "format": "[0-9]{1,4}",
+                      "action": "Display"
+                  },
+                  "node_number" : {
+                      "prompt": "Node Number",
+                      "tooltip": "Module Node Number - change your peril",
+                      "current": "4321",
+                      "default": "4321",
+                      "format": "[0-9]{1,4}",
+                      "action": "Display"
+                  },
+                  "start_event_id" : {
+                      "prompt": "Start Event Id",
+                      "tooltip": "The event that will be generated when the ED and GridConnect services start (ON) and stop (OFF)",
+                      "current": "1",
+                      "default": "1",
+                      "format": "[0-9]{1,2}",
+                      "action": "Edit"
+                  },
+                  "node_mode" : {
+                      "tooltip": "",
+                      "current": "0",
+                      "default": "0",
+                      "format": "[0-9]{1,2}",
+                      "action": "Hide"
+                  }
+        }"#;
+        let config: ConfigHash = read_defn_str(data).expect("Deserialize failed");
+    }
+
+    #[test]
     fn read_json_file() {
         dotenv().ok();
         let config_file = env::var("CONFIG_FILE").expect("CONFIG_FILE is not set in .env file");
         let config = read_defn_file(config_file).expect("Deserialize failed");
         assert_eq!(config.len(), 29);
-    }
-
-    #[test]
-    #[should_panic]
-    fn read_json_file_2() {
-        dotenv().ok();
-        let _config_file = env::var("CONFOG_FILE").expect("CONFIG_FILE is not set in .env file");
     }
 
     #[test]
