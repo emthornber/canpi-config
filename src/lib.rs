@@ -104,6 +104,11 @@ pub fn attributes_with_action(
     attr2
 }
 
+/// Read the current canpi cfg values from file defined by 'path'
+pub fn read_cfg_file<P:AsRef<Path>>(path: P) -> Result<Ini, CanPiCfgError> {
+    let cfg = Ini::load_from_file(path)?;
+    Ok(cfg)
+}
 /// Output the keys and current values of items to the file defined by 'path'
 pub fn write_cfg_file<P: AsRef<Path>>(path: P, config: ConfigHash) -> Result<(), CanPiCfgError> {
     let mut cfg = Ini::new();
@@ -247,7 +252,7 @@ mod tests {
                       "action": "Hide"
                   }
         }"#;
-        let config: ConfigHash = read_defn_str(data).expect("Deserialize failed");
+        let _config: ConfigHash = read_defn_str(data).expect("Deserialize failed");
     }
 
     #[test]
