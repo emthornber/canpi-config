@@ -64,7 +64,7 @@ pub enum CanPiCfgError {
     /// The error was caused by a failure to deserialize the JSON
     #[error("cannot deserialize configuration file")]
     Json(#[from] serde_json::Error),
-    /// The error was cause when reading or writing the .cfg file
+    /// The error was caused when reading or writing the .cfg file
     #[error("cannot read cfg file")]
     Ini(#[from] ini::Error),
 }
@@ -91,21 +91,19 @@ pub fn read_defn_str(data: &str) -> Result<ConfigHash, CanPiCfgError> {
 }
 
 /// Filters the attributes by action
-pub fn attributes_with_action(
-    attrs: &ConfigHash,
-    action: AttributeAction,
-) -> ConfigHash {
+pub fn attributes_with_action(attrs: &ConfigHash, action: AttributeAction) -> ConfigHash {
     let mut attr2 = ConfigHash::new();
-    attr2.extend(attrs
-        .iter()
-        .filter(|(_k, v)| v.action == action)
-        .map(|(k, v)| (k.clone(), v.clone()))
+    attr2.extend(
+        attrs
+            .iter()
+            .filter(|(_k, v)| v.action == action)
+            .map(|(k, v)| (k.clone(), v.clone())),
     );
     attr2
 }
 
 /// Read the current canpi cfg values from file defined by 'path'
-pub fn read_cfg_file<P:AsRef<Path>>(path: P) -> Result<Ini, CanPiCfgError> {
+pub fn read_cfg_file<P: AsRef<Path>>(path: P) -> Result<Ini, CanPiCfgError> {
     let cfg = Ini::load_from_file(path)?;
     Ok(cfg)
 }
@@ -126,15 +124,24 @@ fn update_current_value(mut a: Attribute, v: String) -> Attribute {
 
 /// Read the INI format file 'path' and load the values into the 'current' field of the matching
 /// ConfigHash entry.
-pub fn update_defn_from_cfg<P: AsRef<Path>>(path: P, config: ConfigHash) -> Result<ConfigHash, CanPiCfgError> {
+pub fn update_defn_from_cfg<P: AsRef<Path>>(
+    path: P,
+    config: ConfigHash,
+) -> Result<ConfigHash, CanPiCfgError> {
     let cfg = Ini::load_from_file(path)?;
     let mut c = config.clone();
-    for (k, v) in cfg.general_section().iter() {
-        let attr = config.get(k);
-        if let Some(a) = attr {
-            c.insert(k.to_string(), update_current_value(a.clone(), v.to_string()));
-        } else {
-            println!("Key '{}' not defined in configuration", k);
+    let properties = cfg.section(None::<String>);
+    if let Some(p) = properties {
+        for (k, v) in p.iter() {
+            let attr = config.get(k);
+            if let Some(a) = attr {
+                c.insert(
+                    k.to_string(),
+                    update_current_value(a.clone(), v.to_string()),
+                );
+            } else {
+                println!("Key '{}' not defined in configuration", k);
+            }
         }
     }
     Ok(c)
@@ -142,7 +149,10 @@ pub fn update_defn_from_cfg<P: AsRef<Path>>(path: P, config: ConfigHash) -> Resu
 
 #[cfg(test)]
 mod tests {
-    use crate::{Attribute, AttributeAction, ConfigHash, attributes_with_action, read_defn_str, read_defn_file, write_cfg_file};
+    use crate::{
+        attributes_with_action, read_defn_file, read_defn_str, write_cfg_file, Attribute,
+        AttributeAction, ConfigHash,
+    };
     use dotenv::dotenv;
     use serde_json::Result;
     use std::env;
@@ -153,7 +163,7 @@ mod tests {
         let data = r#"
         {
             "prompt": "CAN Id",
-            "tooltip": "The CAN Id used by the CAN Pi CAP/Zero on the CBUS",
+            "tooltip": "The CAN Id used by the CANPi CAP/Zero on the CBUS",
             "current": "100",
             "default": "100",
             "format": "[0-9]{1,4}",
