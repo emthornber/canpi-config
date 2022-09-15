@@ -15,12 +15,15 @@
 
 use ini::Ini;
 
+use jsonschema::{Draft, JSONSchema};
 use serde::Deserialize;
 
+use serde_json::Value;
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, Read};
 use std::path::Path;
+use std::string::String;
 
 use thiserror::Error;
 
@@ -61,6 +64,9 @@ pub enum CanPiCfgError {
     /// The error was caused by a failure to read the configuration file
     #[error("cannot open configuration file")]
     Io(#[from] std::io::Error),
+    /// The error was caused by failure to validate JSON input
+    #[error("JSON input '{0}' failed to validate against schema")]
+    JsonSchema(String),
     /// The error was caused by a failure to deserialize the JSON
     #[error("cannot deserialize configuration file")]
     Json(#[from] serde_json::Error),
@@ -69,6 +75,25 @@ pub enum CanPiCfgError {
     Ini(#[from] ini::Error),
 }
 
+/// Read JSON file and return Serde Value
+fn read_json_file<P: AsRef<Path>>(json_path: P) -> Result<Value, CanPiCfgError> {
+    let mut json_string = String::new();
+    File::open(json_path)
+        .unwrap()
+        .read_to_string(&mut json_string)
+        .unwrap();
+    let json_value: Value = serde_json::from_str(json_string.as_str())?;
+    Ok(json_value)
+}
+
+/// Validate configuration definition JSON against the JSON schema
+pub fn validate_defn_file(json_schema: Value, json_defn: Value) -> bool {
+    let compiled_schema = JSONSchema::options()
+        .with_draft(Draft::Draft7)
+        .compile(&json_schema)
+        .expect("A valid schema");
+    compiled_schema.is_valid(&json_defn)
+}
 /// Read the contents of a file as JSON and load into an instance of 'ConfigHash'
 pub fn read_defn_file<P: AsRef<Path>>(path: P) -> Result<ConfigHash, CanPiCfgError> {
     // Open the file in read-only mode with buffer
@@ -149,10 +174,7 @@ pub fn update_defn_from_cfg<P: AsRef<Path>>(
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        attributes_with_action, read_defn_file, read_defn_str, write_cfg_file, Attribute,
-        AttributeAction, ConfigHash,
-    };
+    use super::*;
     use dotenv::dotenv;
     use serde_json::Result;
     use std::env;
@@ -219,15 +241,19 @@ mod tests {
         assert_eq!(config.len(), 4);
         let displayable: ConfigHash = attributes_with_action(&config, AttributeAction::Display);
         assert_eq!(displayable.len(), 2);
+        assert!(displayable.contains_key("canid"));
+        assert!(displayable.contains_key("node_number"));
         let editable: ConfigHash = attributes_with_action(&config, AttributeAction::Edit);
         assert_eq!(editable.len(), 1);
+        assert!(editable.contains_key("start_event_id"));
         let hidden: ConfigHash = attributes_with_action(&config, AttributeAction::Hide);
         assert_eq!(hidden.len(), 1);
+        assert!(hidden.contains_key("node_mode"));
     }
 
     #[test]
     #[should_panic]
-    fn single_vector_2() {
+    fn single_mal_formed_vector() {
         let data = r#"
         {
                   "canid" : {
@@ -262,15 +288,24 @@ mod tests {
                       "action": "Hide"
                   }
         }"#;
+        // Should fail as key 'node_mode' is missing a 'prompt' value
         let _config: ConfigHash = read_defn_str(data).expect("Deserialize failed");
     }
 
     #[test]
-    fn read_json_file() {
+    fn read_json_file_good() -> std::result::Result<(), String> {
+        dotenv().ok();
+        let config_file = env::var("CONFIG_FILE").expect("CONFIG_FILE is not set in .env file");
+        let _config = read_json_file(config_file).expect("Reading JSON failed");
+        Ok(())
+
+    }
+    #[test]
+    fn read_defn_file_good() {
         dotenv().ok();
         let config_file = env::var("CONFIG_FILE").expect("CONFIG_FILE is not set in .env file");
         let config = read_defn_file(config_file).expect("Deserialize failed");
-        assert_eq!(config.len(), 29);
+        assert_eq!(config.len(), 29)
     }
 
     #[test]

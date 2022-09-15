@@ -11,6 +11,8 @@ edition = "2018"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.72"
 serde_test = "1.0.130"
+# JSON libraries
+jsonschema = "0.16.0"
 # Environment variable access libraries
 dotenv = "0.15.0"
 # .ini file library
@@ -18,3 +20,4 @@ dotenv = "0.15.0"
 rust-ini = "0.17.0"
 # Error handling
 thiserror = "1.0.30"
+anyhow = "1.0.61"
