@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CanPi Config Schema",
+    "type": "object",
+    "properties": {
+      "Item": {
+        "$ref": "#/$defs/Item"
+      }
+  },
+  "$defs": {
+    "Name": {
+      "type": "string",
+      "description": "Name to be used in structs"
+    },
+    "Prompt": {
+      "type": "string",
+      "description": "Prompt to be used on web page"
+    },
+    "Tooltip": {
+      "type": "string",
+      "description": "Description of attribute"
+    },
+    "Current": {
+      "type": "string",
+      "description": "Current value of attribute"
+    },
+    "Default": {
+      "type": "string",
+      "description": "Default value of attribute"
+    },
+    "Format": {
+      "type": "string",
+      "description": "Validation regular expression"
+    },
+    "Action": {
+      "enum": [
+        "Edit",
+        "Display",
+        "Hide"
+      ]
+    },
+    "Attributes": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "$ref": "#/$defs/Prompt"
+        },
+        "tooltip": {
+          "$ref": "#/$defs/Tooltip"
+        },
+        "current": {
+          "$ref": "#/$defs/Current"
+        },
+        "default": {
+          "$ref": "#/$defs/Default"
+        },
+        "format": {
+          "$ref": "#/$defs/Format"
+        },
+        "action": {
+          "$ref": "#/$defs/Action"
+        }
+      }
+    },
+    "Item": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/Name"
+        },
+        "attributes": {
+          "$ref": "#/$defs/Attributes"
+        }
+      }
+    }
+  }
+}
+
