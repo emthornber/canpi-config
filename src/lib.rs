@@ -17,15 +17,20 @@ use ini::Ini;
 
 use jsonschema::{Draft, JSONSchema};
 use serde::Deserialize;
-
 use serde_json::Value;
+
+use include_dir as ID;
 use std::collections::HashMap;
-use std::fs::File;
+use std::fs::{DirBuilder, File};
 use std::io::{BufReader, Read};
 use std::path::Path;
 use std::string::String;
 
 use thiserror::Error;
+
+/// Embed JSON schema for configuration definition
+#[allow(unused)]
+static SCHEMA_DIR: ID::Dir = ID::include_dir!("$CARGO_MANIFEST_DIR/static");
 
 /// Type alias for a HashMap
 pub type ConfigHash = HashMap<String, Attribute>;
@@ -83,6 +88,14 @@ fn read_json_file<P: AsRef<Path>>(json_path: P) -> Result<Value, CanPiCfgError> 
         .read_to_string(&mut json_string)
         .unwrap();
     let json_value: Value = serde_json::from_str(json_string.as_str())?;
+    Ok(json_value)
+}
+
+/// Read configuration definition schema from embedded JSON file
+fn read_defn_schema() -> Result<Value, CanPiCfgError> {
+    let schema_file = SCHEMA_DIR.get_file("config-defn-schema.json").unwrap();
+    let contents = schema_file.contents_utf8().unwrap();
+        let json_value: Value = serde_json::from_str(contents)?;
     Ok(json_value)
 }
 

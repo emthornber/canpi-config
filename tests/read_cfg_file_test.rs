@@ -18,6 +18,6 @@ fn it_reads_cfg() {
     */
     assert_eq!(
         cfg.get_from(None::<String>, "router_ssid"),
-        Some("BTWholeHome-VFC")
+        Some("home")
     );
 }
