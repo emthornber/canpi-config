@@ -21,7 +21,7 @@ use serde_json::Value;
 
 use include_dir as ID;
 use std::collections::HashMap;
-use std::fs::{DirBuilder, File};
+use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
 use std::string::String;
@@ -31,9 +31,6 @@ use thiserror::Error;
 /// Embed JSON schema for configuration definition
 #[allow(unused)]
 static SCHEMA_DIR: ID::Dir = ID::include_dir!("$CARGO_MANIFEST_DIR/static");
-
-/// Type alias for a HashMap
-pub type ConfigHash = HashMap<String, Attribute>;
 
 #[derive(Clone, Deserialize, Debug, PartialEq)]
 /// Defines the possible behaviours of an attribute
@@ -63,6 +60,9 @@ pub struct Attribute {
     action: AttributeAction,
 }
 
+/// Type alias for a HashMap
+pub type ConfigHash = HashMap<String, Attribute>;
+
 #[derive(Error, Debug)]
 /// Categorizes the cause of errors when processing the configuration files
 pub enum CanPiCfgError {
@@ -80,109 +80,128 @@ pub enum CanPiCfgError {
     Ini(#[from] ini::Error),
 }
 
-/// Read JSON file and return Serde Value
-fn read_json_file<P: AsRef<Path>>(json_path: P) -> Result<Value, CanPiCfgError> {
-    let mut json_string = String::new();
-    File::open(json_path)
-        .unwrap()
-        .read_to_string(&mut json_string)
-        .unwrap();
-    let json_value: Value = serde_json::from_str(json_string.as_str())?;
-    Ok(json_value)
+pub struct Cfg {
+    cfg_path: String,
+    def_path: String,
+    schema: Value,
+    cfg: Option<ConfigHash>,
 }
 
-/// Read configuration definition schema from embedded JSON file
-fn read_defn_schema() -> Result<Value, CanPiCfgError> {
-    let schema_file = SCHEMA_DIR.get_file("config-defn-schema.json").unwrap();
-    let contents = schema_file.contents_utf8().unwrap();
-        let json_value: Value = serde_json::from_str(contents)?;
-    Ok(json_value)
-}
-
-/// Validate configuration definition JSON against the JSON schema
-pub fn validate_defn_file(json_schema: Value, json_defn: Value) -> bool {
-    let compiled_schema = JSONSchema::options()
-        .with_draft(Draft::Draft7)
-        .compile(&json_schema)
-        .expect("A valid schema");
-    compiled_schema.is_valid(&json_defn)
-}
-/// Read the contents of a file as JSON and load into an instance of 'ConfigHash'
-pub fn read_defn_file<P: AsRef<Path>>(path: P) -> Result<ConfigHash, CanPiCfgError> {
-    // Open the file in read-only mode with buffer
-    let file = File::open(path)?;
-    let reader = BufReader::new(file);
-
-    // Read the JSON contents of the file as an instance of 'ConfigHash'.
-    let config = serde_json::from_reader(reader)?;
-
-    // Return the 'ConfigHash'.
-    Ok(config)
-}
-
-/// Read the contents of a string as JSON and load into an instance of 'ConfigHash'
-pub fn read_defn_str(data: &str) -> Result<ConfigHash, CanPiCfgError> {
-    let config = serde_json::from_str(data)?;
-
-    // Return the 'ConfigHash'.
-    Ok(config)
-}
-
-/// Filters the attributes by action
-pub fn attributes_with_action(attrs: &ConfigHash, action: AttributeAction) -> ConfigHash {
-    let mut attr2 = ConfigHash::new();
-    attr2.extend(
-        attrs
-            .iter()
-            .filter(|(_k, v)| v.action == action)
-            .map(|(k, v)| (k.clone(), v.clone())),
-    );
-    attr2
-}
-
-/// Read the current canpi cfg values from file defined by 'path'
-pub fn read_cfg_file<P: AsRef<Path>>(path: P) -> Result<Ini, CanPiCfgError> {
-    let cfg = Ini::load_from_file(path)?;
-    Ok(cfg)
-}
-/// Output the keys and current values of items to the file defined by 'path'
-pub fn write_cfg_file<P: AsRef<Path>>(path: P, config: ConfigHash) -> Result<(), CanPiCfgError> {
-    let mut cfg = Ini::new();
-    for (k, v) in config {
-        cfg.set_to(None::<String>, k.clone(), v.current.clone());
-    }
-    cfg.write_to_file(path)?;
-    Ok(())
-}
-
-fn update_current_value(mut a: Attribute, v: String) -> Attribute {
-    a.current = v;
-    a
-}
-
-/// Read the INI format file 'path' and load the values into the 'current' field of the matching
-/// ConfigHash entry.
-pub fn update_defn_from_cfg<P: AsRef<Path>>(
-    path: P,
-    config: ConfigHash,
-) -> Result<ConfigHash, CanPiCfgError> {
-    let cfg = Ini::load_from_file(path)?;
-    let mut c = config.clone();
-    let properties = cfg.section(None::<String>);
-    if let Some(p) = properties {
-        for (k, v) in p.iter() {
-            let attr = config.get(k);
-            if let Some(a) = attr {
-                c.insert(
-                    k.to_string(),
-                    update_current_value(a.clone(), v.to_string()),
-                );
-            } else {
-                println!("Key '{}' not defined in configuration", k);
-            }
+impl Cfg {
+    pub fn new(cfg_path: String, def_path: String) -> Cfg {
+        let schema = Self::read_defn_schema();
+        Cfg {
+            cfg_path: cfg_path,
+            def_path: def_path,
+            schema: schema,
+            cfg: None,
         }
     }
-    Ok(c)
+
+    /// Read configuration definition schema from embedded JSON file
+    fn read_defn_schema() -> Value {
+        let schema_file = SCHEMA_DIR.get_file("config-defn-schema.json").expect("Cannot read internal file");
+        let contents = schema_file.contents_utf8().expect("Cannot read contents as utf8");
+        let json_value: Value = serde_json::from_str(contents).expect("Cannot convert contents to JSON");
+        json_value
+    }
+
+    /// Read JSON file and return Serde Value
+    fn read_json_file<P: AsRef<Path>>(json_path: P) -> Result<Value, CanPiCfgError> {
+        let mut json_string = String::new();
+        File::open(json_path)
+            .unwrap()
+            .read_to_string(&mut json_string)
+            .unwrap();
+        let json_value: Value = serde_json::from_str(json_string.as_str())?;
+        Ok(json_value)
+    }
+
+    /// Validate configuration definition JSON against the JSON schema
+    pub fn validate_defn_file(json_schema: Value, json_defn: Value) -> bool {
+        let compiled_schema = JSONSchema::options()
+            .with_draft(Draft::Draft7)
+            .compile(&json_schema)
+            .expect("A valid schema");
+        compiled_schema.is_valid(&json_defn)
+    }
+    /// Read the contents of a file as JSON and load into an instance of 'ConfigHash'
+    pub fn read_defn_file<P: AsRef<Path>>(path: P) -> Result<ConfigHash, CanPiCfgError> {
+        // Open the file in read-only mode with buffer
+        let file = File::open(path)?;
+        let reader = BufReader::new(file);
+
+        // Read the JSON contents of the file as an instance of 'ConfigHash'.
+        let config = serde_json::from_reader(reader)?;
+
+        // Return the 'ConfigHash'.
+        Ok(config)
+    }
+
+    /// Read the contents of a string as JSON and load into an instance of 'ConfigHash'
+    pub fn read_defn_str(data: &str) -> Result<ConfigHash, CanPiCfgError> {
+        let config = serde_json::from_str(data)?;
+
+        // Return the 'ConfigHash'.
+        Ok(config)
+    }
+
+    /// Filters the attributes by action
+    pub fn attributes_with_action(attrs: &ConfigHash, action: AttributeAction) -> ConfigHash {
+        let mut attr2 = ConfigHash::new();
+        attr2.extend(
+            attrs
+                .iter()
+                .filter(|(_k, v)| v.action == action)
+                .map(|(k, v)| (k.clone(), v.clone())),
+        );
+        attr2
+    }
+
+    /// Read the current canpi cfg values from file defined by 'path'
+    pub fn read_cfg_file<P: AsRef<Path>>(path: P) -> Result<Ini, CanPiCfgError> {
+        let cfg = Ini::load_from_file(path)?;
+        Ok(cfg)
+    }
+    /// Output the keys and current values of items to the file defined by 'path'
+    pub fn write_cfg_file<P: AsRef<Path>>(path: P, config: ConfigHash) -> Result<(), CanPiCfgError> {
+        let mut cfg = Ini::new();
+        for (k, v) in config {
+            cfg.set_to(None::<String>, k.clone(), v.current.clone());
+        }
+        cfg.write_to_file(path)?;
+        Ok(())
+    }
+
+    fn update_current_value(mut a: Attribute, v: String) -> Attribute {
+        a.current = v;
+        a
+    }
+
+    /// Read the INI format file 'path' and load the values into the 'current' field of the matching
+    /// ConfigHash entry.
+    pub fn update_defn_from_cfg<P: AsRef<Path>>(
+        path: P,
+        config: ConfigHash,
+    ) -> Result<ConfigHash, CanPiCfgError> {
+        let cfg = Ini::load_from_file(path)?;
+        let mut c = config.clone();
+        let properties = cfg.section(None::<String>);
+        if let Some(p) = properties {
+            for (k, v) in p.iter() {
+                let attr = config.get(k);
+                if let Some(a) = attr {
+                    c.insert(
+                        k.to_string(),
+                        update_current_value(a.clone(), v.to_string()),
+                    );
+                } else {
+                    println!("Key '{}' not defined in configuration", k);
+                }
+            }
+        }
+        Ok(c)
+    }
 }
 
 #[cfg(test)]
@@ -311,8 +330,8 @@ mod tests {
         let config_file = env::var("CONFIG_FILE").expect("CONFIG_FILE is not set in .env file");
         let _config = read_json_file(config_file).expect("Reading JSON failed");
         Ok(())
-
     }
+
     #[test]
     fn read_defn_file_good() {
         dotenv().ok();
