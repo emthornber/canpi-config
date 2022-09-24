@@ -81,8 +81,8 @@ pub enum CanPiCfgError {
 }
 
 pub struct Cfg {
-    cfg_path: String,
-    def_path: String,
+    cfg_path: Option<String>,
+    def_path: Option<String>,
     schema: Value,
     cfg: Option<ConfigHash>,
 }
@@ -90,15 +90,27 @@ pub struct Cfg {
 impl Cfg {
     pub fn new(cfg_path: String, def_path: String) -> Cfg {
         let schema = Self::read_defn_schema();
+        // Check file paths - we do it here when we know there is a JSON schema loaded.
+        let mut cfg= None;
+        if Path::new(&cfg_path).is_file() {
+            cfg = Some(cfg_path);
+        }
+        let mut def = None;
+        if Path::new(&def_path).is_file() {
+            def = Some(def_path);
+        }
         Cfg {
-            cfg_path: cfg_path,
-            def_path: def_path,
+            cfg_path: cfg,
+            def_path: def,
             schema: schema,
             cfg: None,
         }
     }
 
     /// Read configuration definition schema from embedded JSON file
+    /// If this function cannot read and and convert the contents to a JSON Value then the code panics.
+    /// Makes no sense to continue as the code will need to be recompiled for any schema change to
+    /// take effect.
     fn read_defn_schema() -> Value {
         let schema_file = SCHEMA_DIR.get_file("config-defn-schema.json").expect("Cannot read internal file");
         let contents = schema_file.contents_utf8().expect("Cannot read contents as utf8");
@@ -122,7 +134,7 @@ impl Cfg {
         let compiled_schema = JSONSchema::options()
             .with_draft(Draft::Draft7)
             .compile(&json_schema)
-            .expect("A valid schema");
+            .expect("An invalid schema");
         compiled_schema.is_valid(&json_defn)
     }
     /// Read the contents of a file as JSON and load into an instance of 'ConfigHash'
@@ -193,7 +205,7 @@ impl Cfg {
                 if let Some(a) = attr {
                     c.insert(
                         k.to_string(),
-                        update_current_value(a.clone(), v.to_string()),
+                        Self::update_current_value(a.clone(), v.to_string()),
                     );
                 } else {
                     println!("Key '{}' not defined in configuration", k);
@@ -269,16 +281,16 @@ mod tests {
                       "action": "Hide"
                   }
         }"#;
-        let config: ConfigHash = read_defn_str(data).expect("Deserialize failed");
+        let config: ConfigHash = Cfg::read_defn_str(data).expect("Deserialize failed");
         assert_eq!(config.len(), 4);
-        let displayable: ConfigHash = attributes_with_action(&config, AttributeAction::Display);
+        let displayable: ConfigHash = Cfg::attributes_with_action(&config, AttributeAction::Display);
         assert_eq!(displayable.len(), 2);
         assert!(displayable.contains_key("canid"));
         assert!(displayable.contains_key("node_number"));
-        let editable: ConfigHash = attributes_with_action(&config, AttributeAction::Edit);
+        let editable: ConfigHash = Cfg::attributes_with_action(&config, AttributeAction::Edit);
         assert_eq!(editable.len(), 1);
         assert!(editable.contains_key("start_event_id"));
-        let hidden: ConfigHash = attributes_with_action(&config, AttributeAction::Hide);
+        let hidden: ConfigHash = Cfg::attributes_with_action(&config, AttributeAction::Hide);
         assert_eq!(hidden.len(), 1);
         assert!(hidden.contains_key("node_mode"));
     }
@@ -321,22 +333,22 @@ mod tests {
                   }
         }"#;
         // Should fail as key 'node_mode' is missing a 'prompt' value
-        let _config: ConfigHash = read_defn_str(data).expect("Deserialize failed");
+        let _config: ConfigHash = Cfg::read_defn_str(data).expect("Deserialize failed");
     }
 
     #[test]
     fn read_json_file_good() -> std::result::Result<(), String> {
         dotenv().ok();
-        let config_file = env::var("CONFIG_FILE").expect("CONFIG_FILE is not set in .env file");
-        let _config = read_json_file(config_file).expect("Reading JSON failed");
+        let config_file = env::var("DEF_FILE").expect("DEF_FILE is not set in .env file");
+        let _config = Cfg::read_json_file(config_file).expect("Reading JSON failed");
         Ok(())
     }
 
     #[test]
     fn read_defn_file_good() {
         dotenv().ok();
-        let config_file = env::var("CONFIG_FILE").expect("CONFIG_FILE is not set in .env file");
-        let config = read_defn_file(config_file).expect("Deserialize failed");
+        let config_file = env::var("DEF_FILE").expect("DEF_FILE is not set in .env file");
+        let config = Cfg::read_defn_file(config_file).expect("Deserialize failed");
         assert_eq!(config.len(), 29)
     }
 
@@ -344,9 +356,9 @@ mod tests {
     #[should_panic]
     fn write_init_file() {
         dotenv().ok();
-        let config_file = env::var("CONFIG_FILE").expect("CONFIG_FILE is not set in .env file");
-        let config = read_defn_file(config_file).expect("Deserialize failed");
+        let config_file = env::var("DEF_FILE").expect("DEF_FILE is not set in .env file");
+        let config = Cfg::read_defn_file(config_file).expect("Deserialize failed");
         let cfg_file = "/bert/fred/joe.ini".to_string();
-        write_cfg_file(cfg_file, config).expect("Failed to write cfg file");
+        Cfg::write_cfg_file(cfg_file, config).expect("Failed to write cfg file");
     }
 }

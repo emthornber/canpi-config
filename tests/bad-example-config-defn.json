@@ -28,6 +28,6 @@
     "current": "0",
     "default": "0",
     "format": "[0-9]{1}",
-    "action": "Hade"
+    "action": "Hide"
   }
 }

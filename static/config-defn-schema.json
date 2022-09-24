@@ -33,6 +33,7 @@
       "description": "Validation regular expression"
     },
     "Action": {
+      "type": "string",
       "enum": [
         "Edit",
         "Display",
@@ -60,7 +61,8 @@
         "action": {
           "$ref": "#/$defs/Action"
         }
-      }
+      },
+      "required": ["prompt", "current", "action"]
     },
     "Item": {
       "type": "object",
