@@ -15,6 +15,7 @@ serde_json = "1.0.72"
 serde_test = "1.0.130"
 # JSON libraries
 jsonschema = "0.16.0"
+schemars = "0.8.10"
 # Environment variable access libraries
 dotenv = "0.15.0"
 # .ini file library

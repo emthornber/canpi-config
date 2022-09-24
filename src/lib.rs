@@ -15,11 +15,11 @@
 
 use ini::Ini;
 
+use schemars::{schema_for, JsonSchema};
 use jsonschema::{Draft, JSONSchema};
 use serde::Deserialize;
 use serde_json::Value;
 
-use include_dir as ID;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Read};
@@ -28,12 +28,8 @@ use std::string::String;
 
 use thiserror::Error;
 
-/// Embed JSON schema for configuration definition
-#[allow(unused)]
-static SCHEMA_DIR: ID::Dir = ID::include_dir!("$CARGO_MANIFEST_DIR/static");
-
-#[derive(Clone, Deserialize, Debug, PartialEq)]
-/// Defines the possible behaviours of an attribute
+#[derive(Clone, Deserialize, Debug, JsonSchema, PartialEq)]
+/// Defines the possible actions for an attribute
 pub enum AttributeAction {
     /// User can update the attribute value
     Edit,
@@ -43,21 +39,21 @@ pub enum AttributeAction {
     Hide,
 }
 
-#[derive(Clone, Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug, JsonSchema)]
 /// Definition of an attribute
 pub struct Attribute {
     // Text used to label edit box on form
-    prompt: String,
+    pub prompt: String,
     // Text displayed when cursor hovers over edit box
-    tooltip: String,
+    pub tooltip: String,
     // Current value of attribute.  Used to populate .cfg file
-    current: String,
+    pub current: String,
     // Default value of attribute
-    default: String,
+    pub default: String,
     // Regular expression to validate user input
-    format: String,
+    pub format: String,
     // How attribute behaves
-    action: AttributeAction,
+    pub action: AttributeAction,
 }
 
 /// Type alias for a HashMap
@@ -81,41 +77,52 @@ pub enum CanPiCfgError {
 }
 
 pub struct Cfg {
-    cfg_path: Option<String>,
-    def_path: Option<String>,
-    schema: Value,
+    schema: JSONSchema,
     cfg: Option<ConfigHash>,
 }
 
 impl Cfg {
-    pub fn new(cfg_path: String, def_path: String) -> Cfg {
-        let schema = Self::read_defn_schema();
-        // Check file paths - we do it here when we know there is a JSON schema loaded.
-        let mut cfg= None;
-        if Path::new(&cfg_path).is_file() {
-            cfg = Some(cfg_path);
-        }
-        let mut def = None;
-        if Path::new(&def_path).is_file() {
-            def = Some(def_path);
-        }
+    pub fn new() -> Cfg {
+        let schema = Self::create_defn_schema();
         Cfg {
-            cfg_path: cfg,
-            def_path: def,
             schema: schema,
             cfg: None,
         }
     }
 
-    /// Read configuration definition schema from embedded JSON file
-    /// If this function cannot read and and convert the contents to a JSON Value then the code panics.
-    /// Makes no sense to continue as the code will need to be recompiled for any schema change to
-    /// take effect.
-    fn read_defn_schema() -> Value {
-        let schema_file = SCHEMA_DIR.get_file("config-defn-schema.json").expect("Cannot read internal file");
-        let contents = schema_file.contents_utf8().expect("Cannot read contents as utf8");
-        let json_value: Value = serde_json::from_str(contents).expect("Cannot convert contents to JSON");
-        json_value
+    pub fn load_configuration(&mut self, cfg_path: String, def_path: String) -> Result<(), CanPiCfgError> {
+        let mut cfg = Cfg::read_defn_file(def_path)?;
+        cfg = Cfg::update_defn_from_cfg(cfg_path, cfg)?;
+        self.cfg = Some(cfg);
+
+        Ok(())
+    }
+
+    /// Validate configuration definition JSON against the JSON schema
+    pub fn validate_defn_file(&self, json_defn: Value) -> bool {
+        self.schema.is_valid(&json_defn)
+    }
+
+    pub fn get_attribute( &self, key: String) -> Option<&Attribute> {
+        match &self.cfg {
+            Some(c) => {
+                let attr = c.get(&key);
+                match attr {
+                    Some(a) => Some(a).clone(),
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
+    }
+    /// Create JSON schema from Attribute definition via type alias ConfigHash.  Store compiled
+    /// schema in Cfg structure
+    fn create_defn_schema() -> JSONSchema {
+        let attr_schema = schema_for!(ConfigHash);
+        //println!("{}", serde_json::to_string_pretty(&attr_schema).unwrap());
+        let schema_string = serde_json::to_string(&attr_schema).unwrap();
+        let json_value: Value = serde_json::from_slice(schema_string.as_bytes()).expect("convert schema to json");
+        JSONSchema::options().compile(&json_value).expect("A valid schema")
     }
 
     /// Read JSON file and return Serde Value
@@ -129,16 +136,8 @@ impl Cfg {
         Ok(json_value)
     }
 
-    /// Validate configuration definition JSON against the JSON schema
-    pub fn validate_defn_file(json_schema: Value, json_defn: Value) -> bool {
-        let compiled_schema = JSONSchema::options()
-            .with_draft(Draft::Draft7)
-            .compile(&json_schema)
-            .expect("An invalid schema");
-        compiled_schema.is_valid(&json_defn)
-    }
     /// Read the contents of a file as JSON and load into an instance of 'ConfigHash'
-    pub fn read_defn_file<P: AsRef<Path>>(path: P) -> Result<ConfigHash, CanPiCfgError> {
+    fn read_defn_file<P: AsRef<Path>>(path: P) -> Result<ConfigHash, CanPiCfgError> {
         // Open the file in read-only mode with buffer
         let file = File::open(path)?;
         let reader = BufReader::new(file);
@@ -192,7 +191,7 @@ impl Cfg {
 
     /// Read the INI format file 'path' and load the values into the 'current' field of the matching
     /// ConfigHash entry.
-    pub fn update_defn_from_cfg<P: AsRef<Path>>(
+    fn update_defn_from_cfg<P: AsRef<Path>>(
         path: P,
         config: ConfigHash,
     ) -> Result<ConfigHash, CanPiCfgError> {
@@ -336,6 +335,10 @@ mod tests {
         let _config: ConfigHash = Cfg::read_defn_str(data).expect("Deserialize failed");
     }
 
+    #[test]
+    fn view_generated_schema() {
+        Cfg::create_defn_schema();
+    }
     #[test]
     fn read_json_file_good() -> std::result::Result<(), String> {
         dotenv().ok();

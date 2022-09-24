@@ -1,4 +1,5 @@
 use canpi_config;
+use canpi_config::Cfg;
 use dotenv::dotenv;
 use std::env;
 
@@ -6,8 +7,13 @@ use std::env;
 fn it_reads_cfg() {
     dotenv().ok();
     let cfg_file = env::var("CFG_FILE").expect("CFG_FILE is not set in .env file");
+    let def_file = env::var("DEF_FILE").expect("DEF_FILE is not set in .env file");
+
+    let mut cfg = Cfg::new();
+    cfg.load_configuration(cfg_file, def_file)
+        .expect("Loading configuration");
+
     //    println!("Loaded config file '{}'", cfg_file);
-    let cfg = canpi_config::Cfg::read_cfg_file(cfg_file).expect("Deserialize failed");
     /*
        for (sec, prop) in cfg.iter() {
            println!("Section '{:?}'", sec);
@@ -16,8 +22,10 @@ fn it_reads_cfg() {
            }
        }
     */
-    assert_eq!(
-        cfg.get_from(None::<String>, "router_ssid"),
-        Some("home")
-    );
+    let attr = cfg.get_attribute("router_ssid".to_string());
+    if let Some(a) = attr {
+        assert_eq!(a.current, "home");
+    } else {
+        assert!(false);
+    }
 }
