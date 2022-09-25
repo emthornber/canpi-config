@@ -16,7 +16,7 @@
 use ini::Ini;
 
 use schemars::{schema_for, JsonSchema};
-use jsonschema::{Draft, JSONSchema};
+use jsonschema::{JSONSchema};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -115,6 +115,7 @@ impl Cfg {
             _ => None,
         }
     }
+
     /// Create JSON schema from Attribute definition via type alias ConfigHash.  Store compiled
     /// schema in Cfg structure
     fn create_defn_schema() -> JSONSchema {
@@ -175,12 +176,15 @@ impl Cfg {
         Ok(cfg)
     }
     /// Output the keys and current values of items to the file defined by 'path'
-    pub fn write_cfg_file<P: AsRef<Path>>(path: P, config: ConfigHash) -> Result<(), CanPiCfgError> {
-        let mut cfg = Ini::new();
-        for (k, v) in config {
-            cfg.set_to(None::<String>, k.clone(), v.current.clone());
+    pub fn write_cfg_file<P: AsRef<Path>>(&self, path: P) -> Result<(), CanPiCfgError> {
+        let c  = &self.cfg;
+        if let Some(cfg) = c {
+            let mut ini = Ini::new();
+            for (k, v) in cfg {
+                ini.set_to(None::<String>, k.clone(), v.current.clone());
+            }
+            ini.write_to_file(path)?;
         }
-        cfg.write_to_file(path)?;
         Ok(())
     }
 
@@ -337,7 +341,8 @@ mod tests {
 
     #[test]
     fn view_generated_schema() {
-        Cfg::create_defn_schema();
+        let attr_schema = schema_for!(ConfigHash);
+        println!("{}", serde_json::to_string_pretty(&attr_schema).unwrap());
     }
     #[test]
     fn read_json_file_good() -> std::result::Result<(), String> {
@@ -356,12 +361,13 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn write_init_file() {
+    fn write_ini_file() {
         dotenv().ok();
-        let config_file = env::var("DEF_FILE").expect("DEF_FILE is not set in .env file");
-        let config = Cfg::read_defn_file(config_file).expect("Deserialize failed");
-        let cfg_file = "/bert/fred/joe.ini".to_string();
-        Cfg::write_cfg_file(cfg_file, config).expect("Failed to write cfg file");
+        let mut cfg = Cfg::new();
+        let mut cfg_file = env::var("CFG_FILE").expect("CFG_FILE is not set in .env file");
+        let def_file = env::var("DEF_FILE").expect("DEF_FILE is not set in .env file");
+        cfg.load_configuration(cfg_file.clone(), def_file).expect("config hash populated");
+        cfg_file.push_str(".new");
+        cfg.write_cfg_file(cfg_file).expect("Failed to write cfg file");
     }
 }

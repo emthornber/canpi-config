@@ -1,5 +1,4 @@
 use canpi_config;
-use jsonschema::{Draft, JSONSchema, output::BasicOutput};
 use serde_json::Value;
 use std::fs::File;
 use std::io::BufReader;
