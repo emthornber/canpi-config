@@ -22,7 +22,7 @@ use serde_json::Value;
 
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::BufReader;
 use std::path::Path;
 use std::string::String;
 
@@ -61,19 +61,25 @@ pub type ConfigHash = HashMap<String, Attribute>;
 
 #[derive(Error, Debug)]
 /// Categorizes the cause of errors when processing the configuration files
-pub enum CanPiCfgError {
+pub enum CfgError {
     /// The error was caused by a failure to read the configuration file
     #[error("cannot open configuration file")]
     Io(#[from] std::io::Error),
     /// The error was caused by failure to validate JSON input
     #[error("JSON input '{0}' failed to validate against schema")]
-    Schema(#[from] jsonschema::error::ErrorIterator),
+    Schema(String),
     /// The error was caused by a failure to deserialize the JSON
     #[error("cannot deserialize configuration file")]
     Json(#[from] serde_json::Error),
     /// The error was caused when reading or writing the .cfg file
     #[error("cannot read cfg file")]
     Ini(#[from] ini::Error),
+}
+
+impl std::convert::From<jsonschema::SchemaResolverError> for CfgError {
+    fn from(err: jsonschema::SchemaResolverError) -> Self {
+        CfgError::Schema(err.to_string())
+    }
 }
 
 pub struct Cfg {
@@ -94,23 +100,12 @@ impl Cfg {
         &mut self,
         cfg_path: P,
         def_path: P,
-    ) -> Result<(), CanPiCfgError> {
+    ) -> Result<(), CfgError> {
         let cfg = self.read_defn_file(def_path)?;
-        self.update_defn_from_cfg(cfg_path)?;
         self.cfg = Some(cfg);
+        self.update_defn_from_cfg(cfg_path)?;
 
         Ok(())
-    }
-
-    /// Read JSON file and return Serde Value
-    fn read_json_file<P: AsRef<Path>>(json_path: P) -> Result<Value, CanPiCfgError> {
-        let mut json_string = String::new();
-        File::open(json_path)
-            .unwrap()
-            .read_to_string(&mut json_string)
-            .unwrap();
-        let json_value: Value = serde_json::from_str(json_string.as_str())?;
-        Ok(json_value)
     }
 
     pub fn get_attribute(&self, key: String) -> Option<&Attribute> {
@@ -139,17 +134,23 @@ impl Cfg {
             .expect("A valid schema")
     }
 
-    /// Read the contents of a file as JSON and load into an instance of 'ConfigHash'
-    fn read_defn_file<P: AsRef<Path>>(&self, path: P) -> Result<ConfigHash, CanPiCfgError> {
+    /// Read the contents of a file as JSON and, if valid against the schema, load into an instance
+    /// of 'ConfigHash'
+    fn read_defn_file<P: AsRef<Path>>(&self, path: P) -> Result<ConfigHash, CfgError> {
         // Open the file in read-only mode with buffer
-        let file = File::open(path)?;
+        let file = File::open(path.as_ref())?;
         let reader = BufReader::new(file);
 
         let json_value: Value = serde_json::from_reader(reader)?;
-        self.schema.validate(&json_value)?;
-        // Read the JSON contents of the file as an instance of 'ConfigHash'.
-        let config = serde_json::from_value(json_value)?;
-        Ok(config)
+        if self.schema.is_valid(&json_value) {
+            // Read the JSON contents of the file as an instance of 'ConfigHash'.
+            let config = serde_json::from_value(json_value)?;
+            return Ok(config);
+        }
+        if let Some(f) = path.as_ref().to_str() {
+            return Err(CfgError::Schema(f.to_string()));
+        }
+        Err(CfgError::Schema("(non-utf8 path".to_string()))
     }
 
     /// Filters the attributes by action
@@ -166,12 +167,12 @@ impl Cfg {
     }
 
     /// Read the current canpi cfg values from file defined by 'path'
-    pub fn read_cfg_file<P: AsRef<Path>>(path: P) -> Result<Ini, CanPiCfgError> {
+    pub fn read_cfg_file<P: AsRef<Path>>(path: P) -> Result<Ini, CfgError> {
         let cfg = Ini::load_from_file(path)?;
         Ok(cfg)
     }
     /// Output the keys and current values of items to the file defined by 'path'
-    pub fn write_cfg_file<P: AsRef<Path>>(&self, path: P) -> Result<(), CanPiCfgError> {
+    pub fn write_cfg_file<P: AsRef<Path>>(&self, path: P) -> Result<(), CfgError> {
         let c = &self.cfg;
         if let Some(cfg) = c {
             let mut ini = Ini::new();
@@ -185,21 +186,19 @@ impl Cfg {
 
     /// Read the INI format file 'path' and load the values into the 'current' field of the matching
     /// ConfigHash entry.
-    fn update_defn_from_cfg<P: AsRef<Path>>(&mut self, path: P) -> Result<(), CanPiCfgError> {
+    fn update_defn_from_cfg<P: AsRef<Path>>(&mut self, path: P) -> Result<(), CfgError> {
         let ini = Ini::load_from_file(path)?;
         let cfg = self.cfg.clone();
         if let Some(mut c) = cfg {
-            let properties = ini.section(None::<String>);
-            if let Some(p) = properties {
-                for (k, v) in p.iter() {
-                    let attr = c.get(k);
-                    if let Some(aref) = attr {
-                        let mut a = aref.clone();
-                        a.current = v.to_string();
-                        c.insert(k.to_string(), a);
-                    } else {
-                        println!("Key '{}' not defined in configuration", k);
-                    }
+            let properties = ini.general_section();
+            for (k, v) in properties.iter() {
+                let attr = c.get(k);
+                if let Some(aref) = attr {
+                    let mut a = aref.clone();
+                    a.current = v.to_string();
+                    c.insert(k.to_string(), a);
+                } else {
+                    println!("Key '{}' not defined in configuration", k);
                 }
             }
             self.cfg = Some(c);
@@ -215,47 +214,14 @@ mod tests {
     use std::io::Write;
     use std::{env, fs};
 
-    fn setup_file<P: AsRef<Path>>(test_file: P, data: &str) {
-        let mut f = File::create(test_file).expect("file creation failed");
-        f.write_all(data.as_bytes()).expect("file write failed");
-    }
-
-    fn teardown_file<P: AsRef<Path>>(test_file: P) {
-        fs::remove_file(test_file).expect("file deletion failed");
-    }
-
-    #[test]
-    fn single_attribute() {
-        // Some JSON input data as a &str.  Maybe this comes from a file.
-        let data = r#"
-        {
-            "prompt": "CAN Id",
-            "tooltip": "The CAN Id used by the CANPi CAP/Zero on the CBUS",
-            "current": "100",
-            "default": "100",
-            "format": "[0-9]{1,4}",
-            "action": "Display"
-        }"#;
-
-        // Parse the string of data into an Attribute object.
-        let a: Attribute = serde_json::from_str(data).expect("Failed to deserialize");
-
-        // println!("Attribute is {} ({})", a.attribute, a.tooltip);
-        assert_eq!(a.action, AttributeAction::Display);
-    }
-
-    #[test]
-    /// Test filtering of attributes by action value via attributes_with_action()
-    fn single_vector() {
-        let cfg_file = "scratch/single_vector.cfg";
-        let defn_file = "scratch/single_vector.json";
-        let cfg_data = r#"
+    const CFG_DATA: &str = r#"
         canid=101
-        node_number=4321
-        start_event_id=1
-        node_mode=0
+        node_number=5432
+        start_event_id=2
+        node_mode=1
         "#;
-        let defn_data = r#"
+
+    const DEFN_DATA: &str = r#"
         {
                   "canid" : {
                       "prompt": "CAN Id",
@@ -290,40 +256,8 @@ mod tests {
                       "action": "Hide"
                   }
         }"#;
-        setup_file(&defn_file, defn_data);
-        setup_file(&cfg_file, cfg_data);
-        let mut cfg = Cfg::new();
-        cfg.load_configuration(&cfg_file, &defn_file)
-            .expect("config failed to load");
-        if let Some(config) = cfg.cfg.clone() {
-            assert_eq!(config.len(), 4);
-            let displayable: ConfigHash = cfg.attributes_with_action(AttributeAction::Display);
-            assert_eq!(displayable.len(), 2);
-            assert!(displayable.contains_key("canid"));
-            assert!(displayable.contains_key("node_number"));
-            let editable: ConfigHash = cfg.attributes_with_action(AttributeAction::Edit);
-            assert_eq!(editable.len(), 1);
-            assert!(editable.contains_key("start_event_id"));
-            let hidden: ConfigHash = cfg.attributes_with_action(AttributeAction::Hide);
-            assert_eq!(hidden.len(), 1);
-            assert!(hidden.contains_key("node_mode"));
-        }
-        teardown_file(&cfg_file);
-        teardown_file(&defn_file);
-    }
 
-    #[test]
-    #[should_panic]
-    fn single_malformed_vector() {
-        let cfg_file = "scratch/single_vector.cfg";
-        let defn_file = "scratch/single_malformed_vector.json";
-        let cfg_data = r#"
-        canid=101
-        node_number=4321
-        start_event_id=1
-        node_mode=0
-        "#;
-        let defn_data = r#"
+    const BAD_DATA: &str = r#"
         {
                   "canid" : {
                       "prompt": "CAN Id",
@@ -357,26 +291,120 @@ mod tests {
                       "action": "Hide"
                   }
         }"#;
-        setup_file(&cfg_file, cfg_data);
-        setup_file(&defn_file, defn_data);
+
+    fn setup_file<P: AsRef<Path>>(test_file: P, data: &str) {
+        let mut f = File::create(test_file).expect("file creation failed");
+        f.write_all(data.as_bytes()).expect("file write failed");
+    }
+
+    fn teardown_file<P: AsRef<Path>>(test_file: P) {
+        fs::remove_file(test_file).expect("file deletion failed");
+    }
+
+    #[test]
+    fn single_attribute() {
+        // Some JSON input data as a &str.  Maybe this comes from a file.
+        let data = r#"
+        {
+            "prompt": "CAN Id",
+            "tooltip": "The CAN Id used by the CANPi CAP/Zero on the CBUS",
+            "current": "100",
+            "default": "100",
+            "format": "[0-9]{1,4}",
+            "action": "Display"
+        }"#;
+
+        // Parse the string of data into an Attribute object.
+        let a: Attribute = serde_json::from_str(data).expect("Failed to deserialize");
+
+        // println!("Attribute is {} ({})", a.attribute, a.tooltip);
+        assert_eq!(a.action, AttributeAction::Display);
+    }
+
+    #[test]
+    /// Test creating a ConfigHash
+    fn single_good_vector() {
+        let defn_file = "scratch/single_good_vector.json";
+        setup_file(&defn_file, DEFN_DATA);
+        let cfg = Cfg::new();
+        cfg.read_defn_file(&defn_file)
+            .expect("parameter definition failed to load");
+        teardown_file(&defn_file);
+    }
+
+    #[test]
+    #[should_panic]
+    fn single_malformed_vector() {
+        let defn_file = "scratch/single_malformed_vector.json";
+        setup_file(&defn_file, BAD_DATA);
+        let cfg = Cfg::new();
+        cfg.read_defn_file(&defn_file)
+            .expect("parameter definition failed to load");
+    }
+
+    #[test]
+    /// Test the updating of current values from the .cfg file
+    fn update_with_cfg_test() {
+        let cfg_file = "scratch/update_test.cfg";
+        let defn_file = "scratch/update_test.json";
+        setup_file(&defn_file, DEFN_DATA);
+        setup_file(&cfg_file, CFG_DATA);
+        let mut cfg = Cfg::new();
+        cfg.load_configuration(&cfg_file, &defn_file)
+            .expect("parameter definition failed to load");
+        let ini = Cfg::read_cfg_file(&cfg_file).expect("failed to load .cfg file");
+        if let Some(config) = cfg.cfg.clone() {
+            let properties = ini.section(None::<String>);
+            if let Some(p) = properties {
+                for (k, v) in p.iter() {
+                    let attr = config.get(k);
+                    if let Some(a) = attr {
+                        assert_eq!(a.current, v.to_string(), "attribute {} not updated", k);
+                    } else {
+                        assert!(false, "attribute {} missing", k);
+                    }
+                }
+            }
+        } else {
+            assert!(false, "Cfg.cfg is 'None'");
+        }
+        teardown_file(&cfg_file);
+        teardown_file(&defn_file);
+    }
+
+    #[test]
+    /// Test filtering of attributes by action value via attributes_with_action()
+    fn attributes_with_action_test() {
+        let cfg_file = "scratch/attributes_test.cfg";
+        let defn_file = "scratch/attributes_test.json";
+        setup_file(&defn_file, DEFN_DATA);
+        setup_file(&cfg_file, CFG_DATA);
         let mut cfg = Cfg::new();
         cfg.load_configuration(&cfg_file, &defn_file)
             .expect("config failed to load");
+        if let Some(config) = cfg.cfg.clone() {
+            assert_eq!(config.len(), 4);
+            let displayable: ConfigHash = cfg.attributes_with_action(AttributeAction::Display);
+            assert_eq!(displayable.len(), 2);
+            assert!(displayable.contains_key("canid"));
+            assert!(displayable.contains_key("node_number"));
+            let editable: ConfigHash = cfg.attributes_with_action(AttributeAction::Edit);
+            assert_eq!(editable.len(), 1);
+            assert!(editable.contains_key("start_event_id"));
+            let hidden: ConfigHash = cfg.attributes_with_action(AttributeAction::Hide);
+            assert_eq!(hidden.len(), 1);
+            assert!(hidden.contains_key("node_mode"));
+        } else {
+            assert!(false)
+        }
+        teardown_file(&cfg_file);
+        teardown_file(&defn_file);
     }
 
     #[test]
     fn view_generated_schema() {
         let attr_schema = schema_for!(ConfigHash);
         println!("{}", serde_json::to_string_pretty(&attr_schema).unwrap());
-    }
-
-    #[test]
-    fn read_defn_file_good() {
-        dotenv().ok();
-        let cfg = Cfg::new();
-        let config_file = env::var("DEF_FILE").expect("DEF_FILE is not set in .env file");
-        let config = cfg.read_defn_file(config_file).expect("Deserialize failed");
-        assert_eq!(config.len(), 29)
     }
 
     #[test]

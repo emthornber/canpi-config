@@ -4,6 +4,17 @@ version = "0.1.0"
 authors = ["Mark Thornber <mark.thornber@gmail.com>"]
 edition = "2018"
 
+[lib]
+name = "canpi_config"
+path = "src/lib.rs"
+test = true
+crate-type = ["lib"]
+required-features = []
+
+[[bin]]
+name = "ini_test"
+path = "src/bin/ini_test.rs"
+test = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

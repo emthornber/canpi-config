@@ -4,7 +4,7 @@ use dotenv::dotenv;
 use std::env;
 
 #[test]
-fn it_reads_cfg() {
+fn load_configuration_test() {
     dotenv().ok();
     let cfg_file = env::var("CFG_FILE").expect("CFG_FILE is not set in .env file");
     let def_file = env::var("DEF_FILE").expect("DEF_FILE is not set in .env file");
