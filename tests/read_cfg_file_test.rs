@@ -1,3 +1,5 @@
+mod write_attribute_test;
+
 use canpi_config;
 use canpi_config::Cfg;
 use dotenv::dotenv;
@@ -13,7 +15,7 @@ fn load_configuration_test() {
     cfg.load_configuration(cfg_file, def_file)
         .expect("Loading configuration");
 
-    let attr = cfg.get_attribute("router_ssid".to_string());
+    let attr = cfg.read_attribute("router_ssid".to_string());
     if let Some(a) = attr {
         assert_eq!(a.current, "home");
     } else {

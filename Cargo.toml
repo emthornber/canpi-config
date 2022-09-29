@@ -11,10 +11,6 @@ test = true
 crate-type = ["lib"]
 required-features = []
 
-[[bin]]
-name = "ini_test"
-path = "src/bin/ini_test.rs"
-test = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

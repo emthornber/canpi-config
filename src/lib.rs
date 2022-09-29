@@ -1,6 +1,6 @@
 //! # canpi-config
 //!
-//! This crate provides functionality to read and write the canpi server configuration
+//! A crate to provide functionality to read and write the canpi server configuration
 //! and to define which configuration items can be changed or viewed by the user and which are hidden.
 //!
 //! There is a JSON file that defines the configuration item format and default values
@@ -8,7 +8,7 @@
 //! if it exists, is read to update current value of the configuration items so the ConfigHash
 //! becomes the single source of truth.
 //!
-//! There is a function to write the ConfigHash as an INI file.
+//! There is a function to write the ConfigHash current values as an INI file.
 //
 //  30 November, 2021 - E M Thornber
 //
@@ -29,11 +29,11 @@ use std::string::String;
 use thiserror::Error;
 
 #[derive(Clone, Deserialize, Debug, JsonSchema, PartialEq)]
-/// Defines the possible actions for an attribute
-pub enum AttributeAction {
-    /// User can update the attribute value
+/// Defines the possible behaviours for an attribute
+pub enum ActionBehaviour {
+    /// User can update the value of current field
     Edit,
-    /// User can see the current value of the attribute but cannot change it
+    /// User can see the value of the current field but cannot change it
     Display,
     /// Attribute is for internal use only
     Hide,
@@ -42,21 +42,21 @@ pub enum AttributeAction {
 #[derive(Clone, Deserialize, Debug, JsonSchema)]
 /// Definition of an attribute
 pub struct Attribute {
-    // Text used to label edit box on form
+    /// Text used to label edit box on form
     pub prompt: String,
-    // Text displayed when cursor hovers over edit box
+    /// Text displayed when the user hovers over edit box
     pub tooltip: String,
-    // Current value of attribute.  Used to populate .cfg file
+    /// Current value of attribute.  Used to populate .cfg file
     pub current: String,
-    // Default value of attribute
+    /// Default value of attribute
     pub default: String,
-    // Regular expression to validate user input
+    /// Regular expression to validate user input
     pub format: String,
-    // How attribute behaves
-    pub action: AttributeAction,
+    /// How the attribute is presented on a webpage
+    pub action: ActionBehaviour,
 }
 
-/// Type alias for a HashMap
+/// Type alias based on a HashMap
 pub type ConfigHash = HashMap<String, Attribute>;
 
 #[derive(Error, Debug)]
@@ -74,6 +74,9 @@ pub enum CfgError {
     /// The error was caused when reading or writing the .cfg file
     #[error("cannot read cfg file")]
     Ini(#[from] ini::Error),
+    /// The error was caused by a lack of attribute definitions
+    #[error("Cfg structure not properly initialised")]
+    Cfg(),
 }
 
 impl std::convert::From<jsonschema::SchemaResolverError> for CfgError {
@@ -82,12 +85,19 @@ impl std::convert::From<jsonschema::SchemaResolverError> for CfgError {
     }
 }
 
+/// The structure that holds the definition of configuration items
 pub struct Cfg {
     schema: JSONSchema,
     cfg: Option<ConfigHash>,
 }
 
 impl Cfg {
+    /// Creates a new instance of the structure
+    ///
+    /// The type definition of ConfigHash is used to create a compiled JSON schema that will be used
+    /// to validate the Attribute definitions being loaded to ConfigHash
+    ///
+    /// Note: load_configuration must be called to fully initialise the structure
     pub fn new() -> Cfg {
         let schema = Self::create_defn_schema();
         Cfg {
@@ -96,19 +106,20 @@ impl Cfg {
         }
     }
 
+    /// Load the attribute definitions from `def_path` and then update the current values from `cfg_path`
     pub fn load_configuration<P: AsRef<Path>>(
         &mut self,
         cfg_path: P,
         def_path: P,
     ) -> Result<(), CfgError> {
-        let cfg = self.read_defn_file(def_path)?;
-        self.cfg = Some(cfg);
+        self.read_defn_file(def_path)?;
         self.update_defn_from_cfg(cfg_path)?;
 
         Ok(())
     }
 
-    pub fn get_attribute(&self, key: String) -> Option<&Attribute> {
+    /// Get the attribute definition for the configuration item defined by `key`
+    pub fn read_attribute(&self, key: String) -> Option<&Attribute> {
         match &self.cfg {
             Some(c) => {
                 let attr = c.get(&key);
@@ -121,8 +132,21 @@ impl Cfg {
         }
     }
 
-    /// Create JSON schema from Attribute definition via type alias ConfigHash.  Store compiled
-    /// schema in Cfg structure
+    /// Store an updated attribute definition for the configuration item defined by `key`
+    pub fn write_attribute(&mut self, key: String, value: &Attribute) -> Result<(), CfgError> {
+        let cfg = self.cfg.clone();
+        match cfg {
+            Some(mut c) => {
+                c.insert(key.to_string(),value.clone());
+                self.cfg = Some(c);
+                return Ok(());
+            },
+            _ => {},
+        }
+        Err(CfgError::Cfg())
+    }
+
+    /// Create a compiled JSON schema from Attribute definition via type alias ConfigHash
     fn create_defn_schema() -> JSONSchema {
         let attr_schema = schema_for!(ConfigHash);
         //println!("{}", serde_json::to_string_pretty(&attr_schema).unwrap());
@@ -136,7 +160,7 @@ impl Cfg {
 
     /// Read the contents of a file as JSON and, if valid against the schema, load into an instance
     /// of 'ConfigHash'
-    fn read_defn_file<P: AsRef<Path>>(&self, path: P) -> Result<ConfigHash, CfgError> {
+    fn read_defn_file<P: AsRef<Path>>(&mut self, path: P) -> Result<(), CfgError> {
         // Open the file in read-only mode with buffer
         let file = File::open(path.as_ref())?;
         let reader = BufReader::new(file);
@@ -144,8 +168,8 @@ impl Cfg {
         let json_value: Value = serde_json::from_reader(reader)?;
         if self.schema.is_valid(&json_value) {
             // Read the JSON contents of the file as an instance of 'ConfigHash'.
-            let config = serde_json::from_value(json_value)?;
-            return Ok(config);
+            self.cfg = serde_json::from_value(json_value)?;
+            return Ok(());
         }
         if let Some(f) = path.as_ref().to_str() {
             return Err(CfgError::Schema(f.to_string()));
@@ -154,7 +178,7 @@ impl Cfg {
     }
 
     /// Filters the attributes by action
-    pub fn attributes_with_action(&self, action: AttributeAction) -> ConfigHash {
+    pub fn attributes_with_action(&self, action: ActionBehaviour) -> ConfigHash {
         let mut attr2 = ConfigHash::new();
         if let Some(cfg) = self.cfg.clone() {
             attr2.extend(
@@ -166,12 +190,9 @@ impl Cfg {
         attr2
     }
 
-    /// Read the current canpi cfg values from file defined by 'path'
-    pub fn read_cfg_file<P: AsRef<Path>>(path: P) -> Result<Ini, CfgError> {
-        let cfg = Ini::load_from_file(path)?;
-        Ok(cfg)
-    }
-    /// Output the keys and current values of items to the file defined by 'path'
+    /// Output the keys and current values of items to `path`
+    ///
+    /// Note: The format of the output file is INI with just a general section
     pub fn write_cfg_file<P: AsRef<Path>>(&self, path: P) -> Result<(), CfgError> {
         let c = &self.cfg;
         if let Some(cfg) = c {
@@ -318,7 +339,7 @@ mod tests {
         let a: Attribute = serde_json::from_str(data).expect("Failed to deserialize");
 
         // println!("Attribute is {} ({})", a.attribute, a.tooltip);
-        assert_eq!(a.action, AttributeAction::Display);
+        assert_eq!(a.action, ActionBehaviour::Display);
     }
 
     #[test]
@@ -326,7 +347,7 @@ mod tests {
     fn single_good_vector() {
         let defn_file = "scratch/single_good_vector.json";
         setup_file(&defn_file, DEFN_DATA);
-        let cfg = Cfg::new();
+        let mut cfg = Cfg::new();
         cfg.read_defn_file(&defn_file)
             .expect("parameter definition failed to load");
         teardown_file(&defn_file);
@@ -337,7 +358,7 @@ mod tests {
     fn single_malformed_vector() {
         let defn_file = "scratch/single_malformed_vector.json";
         setup_file(&defn_file, BAD_DATA);
-        let cfg = Cfg::new();
+        let mut cfg = Cfg::new();
         cfg.read_defn_file(&defn_file)
             .expect("parameter definition failed to load");
     }
@@ -352,7 +373,7 @@ mod tests {
         let mut cfg = Cfg::new();
         cfg.load_configuration(&cfg_file, &defn_file)
             .expect("parameter definition failed to load");
-        let ini = Cfg::read_cfg_file(&cfg_file).expect("failed to load .cfg file");
+        let ini = Ini::load_from_file(&cfg_file).expect("failed to load .cfg file");
         if let Some(config) = cfg.cfg.clone() {
             let properties = ini.section(None::<String>);
             if let Some(p) = properties {
@@ -384,14 +405,14 @@ mod tests {
             .expect("config failed to load");
         if let Some(config) = cfg.cfg.clone() {
             assert_eq!(config.len(), 4);
-            let displayable: ConfigHash = cfg.attributes_with_action(AttributeAction::Display);
+            let displayable: ConfigHash = cfg.attributes_with_action(ActionBehaviour::Display);
             assert_eq!(displayable.len(), 2);
             assert!(displayable.contains_key("canid"));
             assert!(displayable.contains_key("node_number"));
-            let editable: ConfigHash = cfg.attributes_with_action(AttributeAction::Edit);
+            let editable: ConfigHash = cfg.attributes_with_action(ActionBehaviour::Edit);
             assert_eq!(editable.len(), 1);
             assert!(editable.contains_key("start_event_id"));
-            let hidden: ConfigHash = cfg.attributes_with_action(AttributeAction::Hide);
+            let hidden: ConfigHash = cfg.attributes_with_action(ActionBehaviour::Hide);
             assert_eq!(hidden.len(), 1);
             assert!(hidden.contains_key("node_mode"));
         } else {
