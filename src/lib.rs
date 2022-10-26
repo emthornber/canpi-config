@@ -112,8 +112,8 @@ impl Cfg {
         cfg_path: P,
         def_path: P,
     ) -> Result<(), CfgError> {
-        self.read_defn_file(def_path)?;
-        self.update_defn_from_cfg(cfg_path)?;
+        let defn = Self::read_defn_file(def_path, &self.schema)?;
+        self.update_cfg_from_defn(defn, cfg_path)?;
 
         Ok(())
     }
@@ -137,11 +137,11 @@ impl Cfg {
         let cfg = self.cfg.clone();
         match cfg {
             Some(mut c) => {
-                c.insert(key.to_string(),value.clone());
+                c.insert(key.to_string(), value.clone());
                 self.cfg = Some(c);
                 return Ok(());
-            },
-            _ => {},
+            }
+            _ => {}
         }
         Err(CfgError::Cfg())
     }
@@ -158,18 +158,18 @@ impl Cfg {
             .expect("A valid schema")
     }
 
-    /// Read the contents of a file as JSON and, if valid against the schema, load into an instance
+    /// Read the contents of a file as JSON and, if valid against the schema, return an instance
     /// of 'ConfigHash'
-    fn read_defn_file<P: AsRef<Path>>(&mut self, path: P) -> Result<(), CfgError> {
+    fn read_defn_file<P: AsRef<Path>>(path: P, schema: &JSONSchema) -> Result<ConfigHash, CfgError> {
         // Open the file in read-only mode with buffer
         let file = File::open(path.as_ref())?;
         let reader = BufReader::new(file);
 
         let json_value: Value = serde_json::from_reader(reader)?;
-        if self.schema.is_valid(&json_value) {
+        if schema.is_valid(&json_value) {
             // Read the JSON contents of the file as an instance of 'ConfigHash'.
-            self.cfg = serde_json::from_value(json_value)?;
-            return Ok(());
+            let cfg = serde_json::from_value(json_value)?;
+            return Ok(cfg);
         }
         if let Some(f) = path.as_ref().to_str() {
             return Err(CfgError::Schema(f.to_string()));
@@ -205,25 +205,29 @@ impl Cfg {
         Ok(())
     }
 
-    /// Read the INI format file 'path' and load the values into the 'current' field of the matching
-    /// ConfigHash entry.
-    fn update_defn_from_cfg<P: AsRef<Path>>(&mut self, path: P) -> Result<(), CfgError> {
+    /// Read the INI format file 'path' and create a ConfigHash from the matching entries in the
+    /// definition file and update the 'current' field with value from 'path'.
+    fn update_cfg_from_defn<P: AsRef<Path>>(
+        &mut self,
+        defn: ConfigHash,
+        path: P,
+    ) -> Result<(), CfgError> {
+        // Read existing configuration file
         let ini = Ini::load_from_file(path)?;
-        let cfg = self.cfg.clone();
-        if let Some(mut c) = cfg {
-            let properties = ini.general_section();
-            for (k, v) in properties.iter() {
-                let attr = c.get(k);
-                if let Some(aref) = attr {
-                    let mut a = aref.clone();
-                    a.current = v.to_string();
-                    c.insert(k.to_string(), a);
-                } else {
-                    println!("Key '{}' not defined in configuration", k);
-                }
+        // Create new ConfigHash to hold configuration
+        let mut cfg = ConfigHash::new();
+        let properties = ini.general_section();
+        for (k, v) in properties.iter() {
+            let attr = defn.get(k);
+            if let Some(aref) = attr {
+                let mut a = aref.clone();
+                a.current = v.to_string();
+                cfg.insert(k.to_string(), a);
+            } else {
+                println!("Key '{}' not defined in configuration", k);
             }
-            self.cfg = Some(c);
         }
+        self.cfg = Some(cfg);
         Ok(())
     }
 }
@@ -347,8 +351,8 @@ mod tests {
     fn single_good_vector() {
         let defn_file = "scratch/single_good_vector.json";
         setup_file(&defn_file, DEFN_DATA);
-        let mut cfg = Cfg::new();
-        cfg.read_defn_file(&defn_file)
+        let schema = Cfg::create_defn_schema();
+        Cfg::read_defn_file(&defn_file, &schema)
             .expect("parameter definition failed to load");
         teardown_file(&defn_file);
     }
@@ -358,8 +362,8 @@ mod tests {
     fn single_malformed_vector() {
         let defn_file = "scratch/single_malformed_vector.json";
         setup_file(&defn_file, BAD_DATA);
-        let mut cfg = Cfg::new();
-        cfg.read_defn_file(&defn_file)
+        let schema = Cfg::create_defn_schema();
+        Cfg::read_defn_file(&defn_file, &schema)
             .expect("parameter definition failed to load");
     }
 
