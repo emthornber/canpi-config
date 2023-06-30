@@ -1,6 +1,6 @@
 [package]
 name = "canpi-config"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["Mark Thornber <mark.thornber@gmail.com>"]
 edition = "2018"
 
@@ -31,3 +31,5 @@ rust-ini = "0.17.0"
 # Error handling
 thiserror = "1.0.30"
 anyhow = "1.0.61"
+# Create file backup
+backitup = "0.1.0"

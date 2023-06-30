@@ -26,6 +26,8 @@ use std::io::BufReader;
 use std::path::Path;
 use std::string::String;
 
+use backitup::backup;
+
 use thiserror::Error;
 
 #[derive(Clone, Deserialize, Debug, JsonSchema, PartialEq)]
@@ -192,13 +194,25 @@ impl Cfg {
 
     /// Output the keys and current values of items to `path`
     ///
+    /// If makeBackup is TRUE then a timestamped backup of the existing INI file is taken
+    ///
     /// Note: The format of the output file is INI with just a general section
-    pub fn write_cfg_file<P: AsRef<Path>>(&self, path: P) -> Result<(), CfgError> {
+    pub fn write_cfg_file<P: AsRef<Path>>(&self, path: P, make_backup: Option<bool>) -> Result<(), CfgError> {
         let c = &self.cfg;
         if let Some(cfg) = c {
             let mut ini = Ini::new();
             for (k, v) in cfg {
                 ini.set_to(None::<String>, k.clone(), v.current.clone());
+            }
+            let mut do_backup: bool = false;
+            if let Some(b) = make_backup {
+                do_backup = b;
+            }
+            if do_backup {
+                match backup(&path) {
+                    Ok(backup_path) => println!("Backup created: {:?}", backup_path),
+                    Err(err) => eprintln!("Failed to create backup: {:?}", err),
+                }
             }
             ini.write_to_file(path)?;
         }
@@ -441,7 +455,7 @@ mod tests {
         cfg.load_configuration(cfg_file.clone(), def_file)
             .expect("config hash populated");
         cfg_file.push_str(".new");
-        cfg.write_cfg_file(cfg_file)
+        cfg.write_cfg_file(cfg_file, Some(true))
             .expect("Failed to write cfg file");
     }
 }
