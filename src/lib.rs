@@ -74,7 +74,7 @@ pub enum CfgError {
     #[error("cannot deserialize configuration file")]
     Json(#[from] serde_json::Error),
     /// The error was caused when reading or writing the .cfg file
-    #[error("cannot read cfg file")]
+    #[error("cannot read/write cfg file")]
     Ini(#[from] ini::Error),
     /// The error was caused by a lack of attribute definitions
     #[error("Cfg structure not properly initialised")]
