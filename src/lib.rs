@@ -246,6 +246,85 @@ impl Cfg {
     }
 }
 
+#[derive(Clone, Deserialize, Debug, JsonSchema)]
+/// Definition of a Package
+pub struct Package {
+    /// Path of package directory
+    pub cfg_path: String,
+    /// Name of INI file
+    pub ini_file: String,
+    /// Name of Attribute Definition File
+    pub json_file: String,
+}
+
+/// Type alias based on a HashMap
+pub type PackageHash = HashMap<String, Package>;
+
+/// The structure that holds the definition of package items
+pub struct Pkg {
+    schema: JSONSchema,
+    pub packages: Option<PackageHash>,
+}
+
+impl Pkg {
+    /// Creates a new instance of the structure
+    ///
+    /// The type definition of PackageHash is used to create a compiled JSON schema that will be used
+    /// to validate the Package definitions being loaded to PackageHash
+    ///
+    /// Note: load_packages must be called to fully initialise the structure
+    pub fn new() -> Pkg {
+        let schema = Self::create_defn_schema();
+        Pkg {
+            schema: schema,
+            packages: None,
+        }
+    }
+
+    /// Create a compiled JSON schema from Package definition via type alias PackageHash
+    fn create_defn_schema() -> JSONSchema {
+        let src_schema = schema_for!(PackageHash);
+        //println!("{}", serde_json::to_string_pretty(&src_schema).unwrap());
+        let schema_string = serde_json::to_string(&src_schema).unwrap();
+        let json_value: Value =
+            serde_json::from_slice(schema_string.as_bytes()).expect("convert schema to json");
+        JSONSchema::options()
+            .compile(&json_value)
+            .expect("A valid schema")
+    }
+
+    /// Load the package definitions from `def_path`
+    pub fn load_packages<P: AsRef<Path>>(
+        &mut self,
+        def_path: P,
+    ) -> Result<(), CfgError> {
+        let pkg = Self::read_defn_file(def_path, &self.schema)?;
+
+        self.packages = Some(pkg);
+        Ok(())
+    }
+
+    /// Read the contents of a file as JSON and, if valid against the schema, return an instance
+    /// of 'PackageHash'
+    fn read_defn_file<P: AsRef<Path>>(path: P, schema: &JSONSchema) -> Result<PackageHash, CfgError> {
+        // Open the file in read-only mode with buffer
+        let file = File::open(path.as_ref())?;
+        let reader = BufReader::new(file);
+
+        let json_value: Value = serde_json::from_reader(reader)?;
+        if schema.is_valid(&json_value) {
+            // Read the JSON contents of the file as an instance of 'PackageHash'.
+            let pkg = serde_json::from_value(json_value)?;
+            return Ok(pkg);
+        }
+        if let Some(f) = path.as_ref().to_str() {
+            return Err(CfgError::Schema(f.to_string()));
+        }
+        Err(CfgError::Schema("(non-utf8 path".to_string()))
+    }
+
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
