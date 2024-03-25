@@ -162,7 +162,10 @@ impl Cfg {
 
     /// Read the contents of a file as JSON and, if valid against the schema, return an instance
     /// of 'ConfigHash'
-    fn read_defn_file<P: AsRef<Path>>(path: P, schema: &JSONSchema) -> Result<ConfigHash, CfgError> {
+    fn read_defn_file<P: AsRef<Path>>(
+        path: P,
+        schema: &JSONSchema,
+    ) -> Result<ConfigHash, CfgError> {
         // Open the file in read-only mode with buffer
         let file = File::open(path.as_ref())?;
         let reader = BufReader::new(file);
@@ -197,7 +200,11 @@ impl Cfg {
     /// If makeBackup is TRUE then a timestamped backup of the existing INI file is taken
     ///
     /// Note: The format of the output file is INI with just a general section
-    pub fn write_cfg_file<P: AsRef<Path>>(&self, path: P, make_backup: Option<bool>) -> Result<(), CfgError> {
+    pub fn write_cfg_file<P: AsRef<Path>>(
+        &self,
+        path: P,
+        make_backup: Option<bool>,
+    ) -> Result<(), CfgError> {
         let c = &self.cfg;
         if let Some(cfg) = c {
             let mut ini = Ini::new();
@@ -294,10 +301,7 @@ impl Pkg {
     }
 
     /// Load the package definitions from `def_path`
-    pub fn load_packages<P: AsRef<Path>>(
-        &mut self,
-        def_path: P,
-    ) -> Result<(), CfgError> {
+    pub fn load_packages<P: AsRef<Path>>(&mut self, def_path: P) -> Result<(), CfgError> {
         let pkg = Self::read_defn_file(def_path, &self.schema)?;
 
         self.packages = Some(pkg);
@@ -306,7 +310,10 @@ impl Pkg {
 
     /// Read the contents of a file as JSON and, if valid against the schema, return an instance
     /// of 'PackageHash'
-    fn read_defn_file<P: AsRef<Path>>(path: P, schema: &JSONSchema) -> Result<PackageHash, CfgError> {
+    fn read_defn_file<P: AsRef<Path>>(
+        path: P,
+        schema: &JSONSchema,
+    ) -> Result<PackageHash, CfgError> {
         // Open the file in read-only mode with buffer
         let file = File::open(path.as_ref())?;
         let reader = BufReader::new(file);
@@ -322,7 +329,6 @@ impl Pkg {
         }
         Err(CfgError::Schema("(non-utf8 path".to_string()))
     }
-
 }
 
 #[cfg(test)]
@@ -445,8 +451,7 @@ mod tests {
         let defn_file = "scratch/single_good_vector.json";
         setup_file(&defn_file, DEFN_DATA);
         let schema = Cfg::create_defn_schema();
-        Cfg::read_defn_file(&defn_file, &schema)
-            .expect("parameter definition failed to load");
+        Cfg::read_defn_file(&defn_file, &schema).expect("parameter definition failed to load");
         teardown_file(&defn_file);
     }
 
@@ -456,8 +461,7 @@ mod tests {
         let defn_file = "scratch/single_malformed_vector.json";
         setup_file(&defn_file, BAD_DATA);
         let schema = Cfg::create_defn_schema();
-        Cfg::read_defn_file(&defn_file, &schema)
-            .expect("parameter definition failed to load");
+        Cfg::read_defn_file(&defn_file, &schema).expect("parameter definition failed to load");
     }
 
     #[test]
