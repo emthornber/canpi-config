@@ -30,6 +30,35 @@ use backitup::backup;
 
 use thiserror::Error;
 
+#[derive(Error, Debug)]
+/// Categorizes the cause of errors when processing the configuration files
+pub enum CfgError {
+    /// The error was caused by a failure to read the configuration file
+    #[error("cannot open configuration file")]
+    Io(#[from] std::io::Error),
+    /// The error was caused by failure to validate JSON input
+    #[error("JSON input '{0}' failed to validate against schema")]
+    Schema(String),
+    /// The error was caused by a failure to deserialize the JSON
+    #[error("cannot deserialize configuration file")]
+    Json(#[from] serde_json::Error),
+    /// The error was caused when reading or writing the .cfg file
+    #[error("cannot read/write cfg file")]
+    Ini(#[from] ini::Error),
+    /// The error was caused by a lack of attribute definitions
+    #[error("Cfg structure not properly initialised")]
+    Cfg(),
+}
+
+impl std::convert::From<jsonschema::SchemaResolverError> for CfgError {
+    fn from(err: jsonschema::SchemaResolverError) -> Self {
+        CfgError::Schema(err.to_string())
+    }
+}
+
+///
+/// Attribute Definitions
+///
 #[derive(Clone, Deserialize, Debug, JsonSchema, PartialEq)]
 /// Defines the possible behaviours for an attribute
 pub enum ActionBehaviour {
@@ -60,32 +89,6 @@ pub struct Attribute {
 
 /// Type alias based on a HashMap
 pub type ConfigHash = HashMap<String, Attribute>;
-
-#[derive(Error, Debug)]
-/// Categorizes the cause of errors when processing the configuration files
-pub enum CfgError {
-    /// The error was caused by a failure to read the configuration file
-    #[error("cannot open configuration file")]
-    Io(#[from] std::io::Error),
-    /// The error was caused by failure to validate JSON input
-    #[error("JSON input '{0}' failed to validate against schema")]
-    Schema(String),
-    /// The error was caused by a failure to deserialize the JSON
-    #[error("cannot deserialize configuration file")]
-    Json(#[from] serde_json::Error),
-    /// The error was caused when reading or writing the .cfg file
-    #[error("cannot read/write cfg file")]
-    Ini(#[from] ini::Error),
-    /// The error was caused by a lack of attribute definitions
-    #[error("Cfg structure not properly initialised")]
-    Cfg(),
-}
-
-impl std::convert::From<jsonschema::SchemaResolverError> for CfgError {
-    fn from(err: jsonschema::SchemaResolverError) -> Self {
-        CfgError::Schema(err.to_string())
-    }
-}
 
 /// The structure that holds the definition of configuration items
 pub struct Cfg {
@@ -253,6 +256,9 @@ impl Cfg {
     }
 }
 
+///
+/// Package Definitions
+///
 #[derive(Clone, Deserialize, Debug, JsonSchema)]
 /// Definition of a Package
 pub struct Package {
