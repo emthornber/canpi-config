@@ -16,6 +16,7 @@
 use ini::Ini;
 
 use jsonschema::JSONSchema;
+use schemars::schema::RootSchema;
 use schemars::{schema_for, JsonSchema};
 use serde::Deserialize;
 use serde_json::Value;
@@ -29,6 +30,15 @@ use std::string::String;
 use backitup::backup;
 
 use thiserror::Error;
+
+fn create_json_schema(root_schema: RootSchema) -> JSONSchema {
+    let schema_string = serde_json::to_string(&root_schema).unwrap();
+    let json_value: Value =
+        serde_json::from_slice(schema_string.as_bytes()).expect("convert schema to json");
+    JSONSchema::options()
+        .compile(&json_value)
+        .expect("A valid schema")
+}
 
 #[derive(Error, Debug)]
 /// Categorizes the cause of errors when processing the configuration files
@@ -103,10 +113,11 @@ impl Cfg {
     /// to validate the Attribute definitions being loaded to ConfigHash
     ///
     /// Note: load_configuration must be called to fully initialise the structure
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Cfg {
-        let schema = Self::create_defn_schema();
+        let cfg_schema = Self::create_struct_schema();
         Cfg {
-            schema: schema,
+            schema: cfg_schema,
             cfg: None,
         }
     }
@@ -129,7 +140,7 @@ impl Cfg {
             Some(c) => {
                 let attr = c.get(&key);
                 match attr {
-                    Some(a) => Some(a).clone(),
+                    Some(a) => Some(a),
                     _ => None,
                 }
             }
@@ -140,27 +151,18 @@ impl Cfg {
     /// Store an updated attribute definition for the configuration item defined by `key`
     pub fn write_attribute(&mut self, key: String, value: &Attribute) -> Result<(), CfgError> {
         let cfg = self.cfg.clone();
-        match cfg {
-            Some(mut c) => {
-                c.insert(key.to_string(), value.clone());
-                self.cfg = Some(c);
-                return Ok(());
-            }
-            _ => {}
+        if let Some(mut c) = cfg {
+            c.insert(key.to_string(), value.clone());
+            self.cfg = Some(c);
+            return Ok(());
         }
         Err(CfgError::Cfg())
     }
 
     /// Create a compiled JSON schema from Attribute definition via type alias ConfigHash
-    fn create_defn_schema() -> JSONSchema {
+    fn create_struct_schema() -> JSONSchema {
         let attr_schema = schema_for!(ConfigHash);
-        //println!("{}", serde_json::to_string_pretty(&attr_schema).unwrap());
-        let schema_string = serde_json::to_string(&attr_schema).unwrap();
-        let json_value: Value =
-            serde_json::from_slice(schema_string.as_bytes()).expect("convert schema to json");
-        JSONSchema::options()
-            .compile(&json_value)
-            .expect("A valid schema")
+        create_json_schema(attr_schema)
     }
 
     /// Read the contents of a file as JSON and, if valid against the schema, return an instance
@@ -287,23 +289,17 @@ impl Pkg {
     ///
     /// Note: load_packages must be called to fully initialise the structure
     pub fn new() -> Pkg {
-        let schema = Self::create_defn_schema();
+        let pkg_schema = Self::create_struct_schema();
         Pkg {
-            schema: schema,
+            schema: pkg_schema,
             packages: None,
         }
     }
 
     /// Create a compiled JSON schema from Package definition via type alias PackageHash
-    fn create_defn_schema() -> JSONSchema {
+    fn create_struct_schema() -> JSONSchema {
         let src_schema = schema_for!(PackageHash);
-        //println!("{}", serde_json::to_string_pretty(&src_schema).unwrap());
-        let schema_string = serde_json::to_string(&src_schema).unwrap();
-        let json_value: Value =
-            serde_json::from_slice(schema_string.as_bytes()).expect("convert schema to json");
-        JSONSchema::options()
-            .compile(&json_value)
-            .expect("A valid schema")
+        create_json_schema(src_schema)
     }
 
     /// Load the package definitions from `def_path`
@@ -456,7 +452,7 @@ mod tests {
     fn single_good_vector() {
         let defn_file = "scratch/single_good_vector.json";
         setup_file(&defn_file, DEFN_DATA);
-        let schema = Cfg::create_defn_schema();
+        let schema = Cfg::create_struct_schema();
         Cfg::read_defn_file(&defn_file, &schema).expect("parameter definition failed to load");
         teardown_file(&defn_file);
     }
@@ -466,7 +462,7 @@ mod tests {
     fn single_malformed_vector() {
         let defn_file = "scratch/single_malformed_vector.json";
         setup_file(&defn_file, BAD_DATA);
-        let schema = Cfg::create_defn_schema();
+        let schema = Cfg::create_struct_schema();
         Cfg::read_defn_file(&defn_file, &schema).expect("parameter definition failed to load");
     }
 
