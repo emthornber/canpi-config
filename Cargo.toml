@@ -31,5 +31,6 @@ rust-ini = "0.21.0"
 # Error handling
 thiserror = "1.0.30"
 anyhow = "1.0.61"
+log = "0.4.21"
 # Create file backup
 backitup = "0.1.0"

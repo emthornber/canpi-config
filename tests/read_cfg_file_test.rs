@@ -1,6 +1,5 @@
 mod write_attribute_test;
 
-use canpi_config;
 use canpi_config::Cfg;
 use dotenv::dotenv;
 use std::env;

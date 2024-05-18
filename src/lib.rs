@@ -29,6 +29,8 @@ use std::string::String;
 
 use backitup::backup;
 
+use log::{error, info};
+
 use thiserror::Error;
 
 fn create_json_schema(root_schema: RootSchema) -> JSONSchema {
@@ -180,9 +182,16 @@ impl Cfg {
             // Read the JSON contents of the file as an instance of 'ConfigHash'.
             let cfg = serde_json::from_value(json_value)?;
             return Ok(cfg);
-        }
-        if let Some(f) = path.as_ref().to_str() {
-            return Err(CfgError::Schema(f.to_string()));
+        } else {
+            let result = schema.validate(&json_value);
+            let pathstr = path.as_ref().to_str().unwrap();
+            if let Err(errors) = result {
+                error!("{} failed validation", pathstr);
+                for error in errors {
+                    error!("{}", error)
+                }
+                return Err(CfgError::Schema(pathstr.to_string()));
+            }
         }
         Err(CfgError::Schema("(non-utf8 path".to_string()))
     }
@@ -250,7 +259,7 @@ impl Cfg {
                 a.current = v.to_string();
                 cfg.insert(k.to_string(), a);
             } else {
-                println!("Key '{}' not defined in configuration", k);
+                info!("Key '{}' not defined in configuration", k);
             }
         }
         self.cfg = Some(cfg);
@@ -288,6 +297,7 @@ impl Pkg {
     /// to validate the Package definitions being loaded to PackageHash
     ///
     /// Note: load_packages must be called to fully initialise the structure
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Pkg {
         let pkg_schema = Self::create_struct_schema();
         Pkg {
@@ -325,9 +335,16 @@ impl Pkg {
             // Read the JSON contents of the file as an instance of 'PackageHash'.
             let pkg = serde_json::from_value(json_value)?;
             return Ok(pkg);
-        }
-        if let Some(f) = path.as_ref().to_str() {
-            return Err(CfgError::Schema(f.to_string()));
+        } else {
+            let result = schema.validate(&json_value);
+            let pathstr = path.as_ref().to_str().unwrap();
+            if let Err(errors) = result {
+                error!("{} failed validation", pathstr);
+                for error in errors {
+                    error!("{}", error)
+                }
+                return Err(CfgError::Schema(pathstr.to_string()));
+            }
         }
         Err(CfgError::Schema("(non-utf8 path".to_string()))
     }
