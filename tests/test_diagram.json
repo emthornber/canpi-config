@@ -1,0 +1,101 @@
+{
+	"cbusstates": [
+		{
+			"name": "TCAA",
+			"event": "N5E3",
+			"state": "UNKN"
+		},
+		{
+			"name": "TCAAS",
+			"event": "N5E4",
+			"state": "UNKN"
+		}
+	],
+	"layout": {
+		"panel": {
+			"width": 11,
+			"height": 5,
+			"tilesize": 60,
+			"colour": "#a4b887",
+			"margins": 10,
+			"border": 2,
+			"title": "Test Diagram"
+		},
+		"controls": [
+			{
+				"tile": {
+					"x_coord": 3,
+					"y_coord": 1
+				},
+				"name": "101",
+				"switch": "Toggle",
+				"action": "101",
+				"tostate": {
+					"normal": "101N",
+					"reverse": "101R"
+				}
+			},
+			{
+				"tile": {
+					"x_coord": 9,
+					"y_coord": 1
+				},
+				"name": "102",
+				"switch": "Toggle",
+				"action": "102",
+				"tostate": {
+					"normal": "102N",
+					"reverse": "102R"
+				}
+			}
+		],
+		"track": [
+			{
+				"tile": {
+					"x_coord": 1,
+					"y_coord": 3
+				},
+				"direction": "EW",
+				"tcstate": "TCAA",
+				"spot": "TCAAS"
+			},
+			{
+				"tile": {
+					"x_coord": 2,
+					"y_coord": 3
+				},
+				"direction": "EW",
+				"label": "AA",
+				"tcstate": "TCAA"
+			}
+		],
+		"turnouts": [
+			{
+				"tile": {
+					"x_coord": 3,
+					"y_coord": 3
+				},
+				"name": "101",
+				"hand": "Wye",
+				"orientation": "East",
+				"tostate": {
+					"normal": "101N",
+					"reverse": "101R"
+				}
+			},
+			{
+				"tile": {
+					"x_coord": 9,
+					"y_coord": 4
+				},
+				"name": "102",
+				"hand": "Right",
+				"orientation": "West",
+				"tostate": {
+					"normal": "102N",
+					"reverse": "102R"
+				}
+			}
+		]
+	}
+}

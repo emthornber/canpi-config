@@ -15,17 +15,20 @@
 
 use ini::Ini;
 
+use glob::glob;
 use jsonschema::JSONSchema;
 use schemars::schema::RootSchema;
 use schemars::{schema_for, JsonSchema};
 use serde::Deserialize;
 use serde_json::Value;
 
-use std::collections::HashMap;
-use std::fs::File;
-use std::io::BufReader;
-use std::path::Path;
-use std::string::String;
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::BufReader,
+    path::{Path, PathBuf},
+    string::String,
+};
 
 use backitup::backup;
 
@@ -57,6 +60,9 @@ pub enum CfgError {
     /// The error was caused when reading or writing the .cfg file
     #[error("cannot read/write cfg file")]
     Ini(#[from] ini::Error),
+    /// The error was caused when reading the diagram definition file list
+    #[error("cannot read diagram definition file names")]
+    Glob(#[from] glob::GlobError),
     /// The error was caused by a lack of attribute definitions
     #[error("Cfg structure not properly initialised")]
     Cfg(),
@@ -67,6 +73,10 @@ impl std::convert::From<jsonschema::SchemaResolverError> for CfgError {
         CfgError::Schema(err.to_string())
     }
 }
+
+///
+/// Menu Item Definitions
+///
 
 ///
 /// Attribute Definitions
@@ -267,91 +277,8 @@ impl Cfg {
     }
 }
 
-///
-/// Package Definitions
-///
-#[derive(Clone, Deserialize, Debug, JsonSchema)]
-/// Definition of a Package
-pub struct Package {
-    /// Path of package directory
-    pub cfg_path: String,
-    /// Name of INI file
-    pub ini_file: String,
-    /// Name of Attribute Definition File
-    pub json_file: String,
-}
-
-/// Type alias based on a HashMap
-pub type PackageHash = HashMap<String, Package>;
-
-/// The structure that holds the definition of package items
-pub struct Pkg {
-    schema: JSONSchema,
-    pub packages: Option<PackageHash>,
-}
-
-impl Pkg {
-    /// Creates a new instance of the structure
-    ///
-    /// The type definition of PackageHash is used to create a compiled JSON schema that will be used
-    /// to validate the Package definitions being loaded to PackageHash
-    ///
-    /// Note: load_packages must be called to fully initialise the structure
-    #[allow(clippy::new_without_default)]
-    pub fn new() -> Pkg {
-        let pkg_schema = Self::create_struct_schema();
-        Pkg {
-            schema: pkg_schema,
-            packages: None,
-        }
-    }
-
-    /// Create a compiled JSON schema from Package definition via type alias PackageHash
-    fn create_struct_schema() -> JSONSchema {
-        let src_schema = schema_for!(PackageHash);
-        create_json_schema(src_schema)
-    }
-
-    /// Load the package definitions from `def_path`
-    pub fn load_packages<P: AsRef<Path>>(&mut self, def_path: P) -> Result<(), CfgError> {
-        let pkg = Self::read_defn_file(def_path, &self.schema)?;
-
-        self.packages = Some(pkg);
-        Ok(())
-    }
-
-    /// Read the contents of a file as JSON and, if valid against the schema, return an instance
-    /// of 'PackageHash'
-    fn read_defn_file<P: AsRef<Path>>(
-        path: P,
-        schema: &JSONSchema,
-    ) -> Result<PackageHash, CfgError> {
-        // Open the file in read-only mode with buffer
-        let file = File::open(path.as_ref())?;
-        let reader = BufReader::new(file);
-
-        let json_value: Value = serde_json::from_reader(reader)?;
-        if schema.is_valid(&json_value) {
-            // Read the JSON contents of the file as an instance of 'PackageHash'.
-            let pkg = serde_json::from_value(json_value)?;
-            return Ok(pkg);
-        } else {
-            let result = schema.validate(&json_value);
-            let pathstr = path.as_ref().to_str().unwrap();
-            if let Err(errors) = result {
-                error!("{} failed validation", pathstr);
-                for error in errors {
-                    error!("{}", error)
-                }
-                return Err(CfgError::Schema(pathstr.to_string()));
-            }
-        }
-        Err(CfgError::Schema("(non-utf8 path".to_string()))
-    }
-}
-
 #[cfg(test)]
-mod tests {
+mod test_cfg {
     use super::*;
     use dotenv::dotenv;
     use std::io::Write;
@@ -559,5 +486,435 @@ mod tests {
         cfg_file.push_str(".new");
         cfg.write_cfg_file(cfg_file, Some(true))
             .expect("Failed to write cfg file");
+    }
+}
+
+///
+/// Package Definitions
+///
+
+#[derive(Clone, Deserialize, Debug, JsonSchema)]
+/// Definition of a Package
+pub struct Package {
+    /// Path of package directory
+    pub cfg_path: String,
+    /// Name of INI file
+    pub ini_file: String,
+    /// Name of Attribute Definition File
+    pub json_file: String,
+}
+
+/// Type alias based on a HashMap
+pub type PackageHash = HashMap<String, Package>;
+
+/// The structure that holds the definition of package items
+pub struct Pkg {
+    schema: JSONSchema,
+    pub packages: Option<PackageHash>,
+}
+
+impl Pkg {
+    /// Creates a new instance of the structure
+    ///
+    /// The type definition of PackageHash is used to create a compiled JSON schema that will be used
+    /// to validate the Package definitions being loaded to PackageHash
+    ///
+    /// Note: load_packages must be called to fully initialise the structure
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Pkg {
+        let pkg_schema = Self::create_struct_schema();
+        Pkg {
+            schema: pkg_schema,
+            packages: None,
+        }
+    }
+
+    /// Create a compiled JSON schema from Package definition
+    /// via type alias PackageHash
+    fn create_struct_schema() -> JSONSchema {
+        let src_schema = schema_for!(PackageHash);
+        create_json_schema(src_schema)
+    }
+
+    /// Load the package definitions from `def_path`
+    pub fn load_packages<P: AsRef<Path>>(&mut self, def_path: P) -> Result<(), CfgError> {
+        let pkg = Self::read_defn_file(def_path, &self.schema)?;
+
+        self.packages = Some(pkg);
+        Ok(())
+    }
+
+    /// Read the contents of a file as JSON and, if valid against the schema, return an instance
+    /// of 'PackageHash'
+    fn read_defn_file<P: AsRef<Path>>(
+        path: P,
+        schema: &JSONSchema,
+    ) -> Result<PackageHash, CfgError> {
+        // Open the file in read-only mode with buffer
+        let file = File::open(path.as_ref())?;
+        let reader = BufReader::new(file);
+
+        let json_value: Value = serde_json::from_reader(reader)?;
+        if schema.is_valid(&json_value) {
+            // Read the JSON contents of the file as an instance of 'PackageHash'.
+            let pkg = serde_json::from_value(json_value)?;
+            return Ok(pkg);
+        } else {
+            let result = schema.validate(&json_value);
+            let pathstr = path.as_ref().to_str().unwrap();
+            if let Err(errors) = result {
+                error!("{} failed validation", pathstr);
+                for error in errors {
+                    error!("{}", error)
+                }
+                return Err(CfgError::Schema(pathstr.to_string()));
+            }
+        }
+        Err(CfgError::Schema("(non-utf8 path".to_string()))
+    }
+}
+
+///
+/// Signalling Panel Definitions
+///
+/// The enum and struct definitions are detailed so that JSON diagram definition
+/// can be parsed successfully.
+/// The only attribute used is diagram.layout.panel.title hence the supression
+/// of dead code warnings.
+
+/// Enumerations
+///
+/// Direction of track marking on a Tile
+#[derive(Clone, Deserialize, Debug, JsonSchema, PartialEq)]
+#[allow(dead_code)]
+pub enum Direction {
+    EW,
+    NE,
+    NS,
+    NW,
+    SE,
+    SW,
+}
+
+/// State of CBus event
+#[derive(Clone, Deserialize, Debug, JsonSchema, PartialEq)]
+#[allow(dead_code)]
+pub enum State {
+    UNKN,
+    ZERO,
+    ONE,
+}
+
+/// Type of control switch
+#[derive(Clone, Deserialize, Debug, JsonSchema, PartialEq)]
+pub enum SwitchType {
+    Toggle,
+    PushButton,
+}
+
+#[derive(Clone, Deserialize, Debug, JsonSchema, PartialEq)]
+#[allow(dead_code)]
+pub enum TurnOutDirection {
+    North,
+    East,
+    South,
+    West,
+}
+
+#[derive(Clone, Deserialize, Debug, JsonSchema, PartialEq)]
+#[allow(dead_code)]
+pub enum TurnOutHand {
+    Left,
+    Right,
+    Wye,
+}
+
+/// Structures
+///
+/// CbusStates that indicate how the turnout is lying
+#[derive(Clone, Deserialize, Debug, JsonSchema)]
+#[allow(dead_code)]
+pub struct TurnoutState {
+    /// Treat these as a double-bit
+    /// 0-0 In-transit
+    /// 1-0 Normal
+    /// 0-1 Reverse
+    /// 1-1 ERROR
+    normal: String,
+    reverse: String,
+}
+
+/// Definition of the state of a CBus event
+#[derive(Clone, Deserialize, Debug, JsonSchema)]
+#[allow(dead_code)]
+pub struct CbusState {
+    /// Item name
+    name: String,
+    /// Event number - either long or short format
+    event: String,
+    /// Current state of the event
+    state: State,
+}
+
+/// Dimensions of the panel
+#[derive(Clone, Deserialize, Debug, JsonSchema)]
+#[allow(dead_code)]
+pub struct Panel {
+    /// Width of panel in tiles
+    width: u16,
+    /// Height of panel in tiles
+    height: u16,
+    /// size (in pixels) of a square tile
+    tilesize: u16,
+    /// RGB colour definition of panel background
+    colour: u32,
+    /// Margin in pixels
+    margins: u16,
+    //// Border in pixels
+    border: u16,
+    /// Diagram title
+    title: String,
+}
+
+/// Position of tile within panel
+#[derive(Clone, Deserialize, Debug, JsonSchema)]
+#[allow(dead_code)]
+pub struct Tile {
+    /// (1 <= x_coord <= panel.width)
+    x_coord: u16,
+    /// (1 <= y_coord <= panel.height)
+    y_coord: u16,
+}
+
+// How the track is shown on a tile
+#[derive(Clone, Deserialize, Debug, JsonSchema)]
+#[allow(dead_code)]
+pub struct Track {
+    /// Where the track is on the panel
+    tile: Tile,
+    /// Which image to use
+    direction: Direction,
+    /// Text to be displayed on panel
+    label: Option<String>,
+    /// CbusState that provides state of track circuit
+    tcstate: String,
+    /// CbusState that provides state of train detector
+    spot: Option<String>,
+}
+
+/// Turnout (switch, point) details
+#[derive(Clone, Deserialize, Debug, JsonSchema)]
+#[allow(dead_code)]
+pub struct Turnout {
+    /// Where on panel
+    tile: Tile,
+    /// Text to be displayed on panel
+    name: String,
+    /// Left, Right of Wye
+    hand: TurnOutHand,
+    /// Direction turnout is laid
+    orientation: TurnOutDirection,
+    /// CbusStates that define the turnout state
+    tostate: TurnoutState,
+}
+
+/// Definition of a control switch
+#[derive(Clone, Deserialize, Debug, JsonSchema)]
+#[allow(dead_code)]
+pub struct Control {
+    /// Position of switch on panel
+    tile: Tile,
+    /// Display name
+    name: String,
+    switch: SwitchType,
+    /// Name of CBusState that acutates turnout
+    action: String,
+    /// How the turnout currently lies
+    tostate: TurnoutState,
+}
+
+/// Specification of the signalling diagram
+#[derive(Clone, Deserialize, Debug, JsonSchema)]
+#[allow(dead_code)]
+pub struct Layout {
+    /// Overall panel details
+    panel: Panel,
+    /// List of controls for turnouts, signals, ...
+    controls: Vec<Control>,
+    /// Track layout
+    track: Vec<Track>,
+    /// Turnout definitions
+    turnouts: Vec<Turnout>,
+}
+
+/// Definition of a Signalling Panel
+#[derive(Clone, Deserialize, Debug, JsonSchema)]
+#[allow(dead_code)]
+pub struct Diagram {
+    /// The state of the CBus producers and consumers
+    cbusstates: Vec<CbusState>,
+    /// The realisation of the signalling diagram
+    layout: Layout,
+}
+
+#[derive(Clone, Deserialize, Debug, JsonSchema)]
+pub struct PanelDefinition {
+    title: String,
+    json_file: PathBuf,
+}
+
+/// Type alias defining the signalling diagram JSON files
+pub type PanelHash = HashMap<u8, PanelDefinition>;
+
+/// The definition of available control panels
+pub struct PanelList {
+    schema: JSONSchema,
+    pub panels: Option<PanelHash>,
+}
+
+impl PanelList {
+    /// Create a new instance of the structure
+    ///
+    /// The type definition of Diagram is used to create
+    /// a compiled JSON schema that will be used to validate
+    /// the panel definition being referenced by PanelHash.
+    pub fn new<P: AsRef<Path>>(panel_dir: P) -> PanelList {
+        let schema = Self::create_diagram_schema();
+        let panels = Self::load_panels(panel_dir, &schema);
+        PanelList { schema, panels }
+    }
+
+    /// Create a compiled JSON schema from Diagram definition
+    fn create_diagram_schema() -> JSONSchema {
+        let schema = schema_for!(Diagram);
+        create_json_schema(schema)
+    }
+
+    /// Load the panel definitions from `${panel_dir}/*.json`, extract 'title'
+    /// from JSON definitions, and store in PanelHash.
+    fn load_panels<P: AsRef<Path>>(panel_dir: P, schema: &JSONSchema) -> Option<PanelHash> {
+        // Read list of JSON files
+        let pf = Self::find_panel_definitions(panel_dir);
+        match pf {
+            Ok(panel_files) => {
+                let mut index = 1;
+                let mut panels = PanelHash::new();
+                // Walk through file list
+                for panel in panel_files {
+                    if let Ok(panel_defn) = Self::read_defn_file(panel, schema) {
+                        // JSON file validated successfully so add to PanelHash
+                        if let Some(_) = panels.insert(index, panel_defn) {
+                            index += 1;
+                        }
+                    }
+                    // ignore failures
+                }
+                if panels.len() > 0 {
+                    Some(panels)
+                } else {
+                    None
+                }
+            }
+            Err(e) => {
+                // Log error text
+                error!("{}", e);
+                None
+            }
+        }
+    }
+
+    /// Return list of all JSON files in 'panels' directory
+    fn find_panel_definitions<P: AsRef<Path>>(panel_dir: P) -> Result<Vec<PathBuf>, CfgError> {
+        let mut panel_vec: Vec<PathBuf> = Vec::new();
+        let mut panel_json = panel_dir.as_ref().to_path_buf();
+        panel_json.push("*.json");
+        if let Some(glob_str) = panel_json.to_str() {
+            for entry in glob(glob_str).unwrap().filter_map(Result::ok) {
+                panel_vec.push(entry);
+            }
+        }
+        Ok(panel_vec)
+    }
+
+    /// Read the contents of a file as JSON and, if valid against the schema,
+    /// return an instance of 'PanelDefinition'
+    fn read_defn_file<P: AsRef<Path>>(
+        path: P,
+        schema: &JSONSchema,
+    ) -> Result<PanelDefinition, CfgError> {
+        // Open the file in read-only mode with buffer
+        let file = File::open(path.as_ref())?;
+        let reader = BufReader::new(file);
+
+        let json_value: Value = serde_json::from_reader(reader)?;
+        if schema.is_valid(&json_value) {
+            // Read the JSON contents of the file as an instance of 'Diagram'.
+            let diagram: Diagram = serde_json::from_value(json_value)?;
+            let title = diagram.layout.panel.title;
+            let json_file = path.as_ref().to_path_buf();
+            let panel_entry = PanelDefinition { title, json_file };
+            return Ok(panel_entry);
+        } else {
+            // JSON not valid against schema - log detailed error report
+            let result = schema.validate(&json_value);
+            let pathstr = path.as_ref().to_str().unwrap();
+            if let Err(errors) = result {
+                error!("{} failed validation", pathstr);
+                for error in errors {
+                    error!("{}", error)
+                }
+                return Err(CfgError::Schema(pathstr.to_string()));
+            }
+        }
+        Err(CfgError::Schema("(non-utf8 path".to_string()))
+    }
+}
+
+#[cfg(test)]
+mod test_panel_list {
+    use super::*;
+    use dotenv::dotenv;
+    use std::io::Write;
+    use std::{env, fs};
+
+    fn setup_file<P: AsRef<Path>>(test_file: P, data: &str) {
+        let mut f = File::create(test_file).expect("file creation failed");
+        f.write_all(data.as_bytes()).expect("file write failed");
+    }
+
+    fn teardown_file<P: AsRef<Path>>(test_file: P) {
+        fs::remove_file(test_file).expect("file deletion failed");
+    }
+
+    #[test]
+    fn find_panel_definitions_zero() {
+        let panel_dir = "src/";
+        let pf = PanelList::find_panel_definitions(&panel_dir).unwrap();
+        assert_eq!(pf.len(), 0);
+    }
+
+    #[test]
+    fn find_panel_definitions_more_than_zero() {
+        let json_file = "scratch/panel.json";
+        setup_file(json_file, "{}");
+        let panel_dir = "scratch/";
+        let pf = PanelList::find_panel_definitions(&panel_dir).unwrap();
+        assert!(pf.len() > 0);
+        teardown_file(json_file)
+    }
+
+    #[test]
+    #[should_panic]
+    fn read_defn_file_not_valid() {
+        let schema = PanelList::create_diagram_schema();
+        let json_file = "tests/good-example-config-defn.json";
+        let _pd = PanelList::read_defn_file(json_file, &schema).expect("not JSON for a Diagram ");
+    }
+    #[test]
+    fn read_defn_file_validates() {
+        let schema = PanelList::create_diagram_schema();
+        let json_file = "tests/test_diagram.json";
+        let pd = PanelList::read_defn_file(json_file, &schema).expect("not JSON for a Diagram ");
+        assert_eq!(pd.title, "Test Diagram");
     }
 }
