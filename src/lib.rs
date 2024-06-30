@@ -127,7 +127,7 @@ impl Cfg {
     /// Note: load_configuration must be called to fully initialise the structure
     #[allow(clippy::new_without_default)]
     pub fn new() -> Cfg {
-        let cfg_schema = Self::create_struct_schema();
+        let cfg_schema = Self::create_confighash_schema();
         Cfg {
             schema: cfg_schema,
             cfg: None,
@@ -172,7 +172,7 @@ impl Cfg {
     }
 
     /// Create a compiled JSON schema from Attribute definition via type alias ConfigHash
-    fn create_struct_schema() -> JSONSchema {
+    fn create_confighash_schema() -> JSONSchema {
         let attr_schema = schema_for!(ConfigHash);
         create_json_schema(attr_schema)
     }
@@ -396,7 +396,7 @@ mod test_cfg {
     fn single_good_vector() {
         let defn_file = "scratch/single_good_vector.json";
         setup_file(&defn_file, DEFN_DATA);
-        let schema = Cfg::create_struct_schema();
+        let schema = Cfg::create_confighash_schema();
         Cfg::read_defn_file(&defn_file, &schema).expect("parameter definition failed to load");
         teardown_file(&defn_file);
     }
@@ -406,7 +406,7 @@ mod test_cfg {
     fn single_malformed_vector() {
         let defn_file = "scratch/single_malformed_vector.json";
         setup_file(&defn_file, BAD_DATA);
-        let schema = Cfg::create_struct_schema();
+        let schema = Cfg::create_confighash_schema();
         Cfg::read_defn_file(&defn_file, &schema).expect("parameter definition failed to load");
     }
 
@@ -470,6 +470,7 @@ mod test_cfg {
     }
 
     #[test]
+    #[ignore = "verbose output"]
     fn view_generated_schema() {
         let attr_schema = schema_for!(ConfigHash);
         println!("{}", serde_json::to_string_pretty(&attr_schema).unwrap());
@@ -520,28 +521,31 @@ impl Pkg {
     /// to validate the Package definitions being loaded to PackageHash
     ///
     /// Note: load_packages must be called to fully initialise the structure
-    #[allow(clippy::new_without_default)]
-    pub fn new() -> Pkg {
-        let pkg_schema = Self::create_struct_schema();
-        Pkg {
-            schema: pkg_schema,
-            packages: None,
-        }
+    pub fn new<P: AsRef<Path>>(def_path: P) -> Pkg {
+        let schema = Self::create_packagehash_schema();
+        let packages = Self::load_packages(def_path, &schema);
+        Pkg { schema, packages }
     }
 
     /// Create a compiled JSON schema from Package definition
     /// via type alias PackageHash
-    fn create_struct_schema() -> JSONSchema {
+    fn create_packagehash_schema() -> JSONSchema {
         let src_schema = schema_for!(PackageHash);
         create_json_schema(src_schema)
     }
 
     /// Load the package definitions from `def_path`
-    pub fn load_packages<P: AsRef<Path>>(&mut self, def_path: P) -> Result<(), CfgError> {
-        let pkg = Self::read_defn_file(def_path, &self.schema)?;
-
-        self.packages = Some(pkg);
-        Ok(())
+    fn load_packages<P: AsRef<Path>>(def_path: P, schema: &JSONSchema) -> Option<PackageHash> {
+        // Read JSON file
+        let pkg = Self::read_defn_file(def_path, &schema);
+        match pkg {
+            Ok(packages) => Some(packages),
+            Err(e) => {
+                //log error text
+                eprintln!("{}", e);
+                None
+            }
+        }
     }
 
     /// Read the contents of a file as JSON and, if valid against the schema, return an instance
@@ -551,29 +555,112 @@ impl Pkg {
         schema: &JSONSchema,
     ) -> Result<PackageHash, CfgError> {
         // Open the file in read-only mode with buffer
-        let file = File::open(path.as_ref())?;
-        let reader = BufReader::new(file);
+        let f = File::open(path.as_ref());
+        match f {
+            Ok(file) => {
+                let reader = BufReader::new(file);
 
-        let json_value: Value = serde_json::from_reader(reader)?;
-        if schema.is_valid(&json_value) {
-            // Read the JSON contents of the file as an instance of 'PackageHash'.
-            let pkg = serde_json::from_value(json_value)?;
-            return Ok(pkg);
-        } else {
-            let result = schema.validate(&json_value);
-            let pathstr = path.as_ref().to_str().unwrap();
-            if let Err(errors) = result {
-                error!("{} failed validation", pathstr);
-                for error in errors {
-                    error!("{}", error)
+                if let Ok(json_value) = serde_json::from_reader(reader) {
+                    if schema.is_valid(&json_value) {
+                        // Read the JSON contents of the file as an instance of 'PackageHash'.
+                        if let Ok(pkg) = serde_json::from_value(json_value) {
+                            Ok(pkg)
+                        } else {
+                            eprintln!("conversion to struct failed");
+                            Err(CfgError::Schema(
+                                "(failed to convert JSON to struct)".to_string(),
+                            ))
+                        }
+                    } else {
+                        let result = schema.validate(&json_value);
+                        let pathstr = path.as_ref().to_str().unwrap();
+                        if let Err(errors) = result {
+                            eprintln!("schema errors");
+                            for error in errors {
+                                eprintln!("{}", error);
+                            }
+                        }
+                        eprintln!("{} failed validation", pathstr);
+                        Err(CfgError::Schema(pathstr.to_string()))
+                    }
+                } else {
+                    eprintln!("reading file as json failed");
+                    Err(CfgError::Schema("(non-utf8 path)".to_string()))
                 }
-                return Err(CfgError::Schema(pathstr.to_string()));
             }
+            Err(e) => Err(CfgError::Io(e)),
         }
-        Err(CfgError::Schema("(non-utf8 path".to_string()))
     }
 }
 
+#[cfg(test)]
+mod test_pkg {
+    use super::*;
+
+    #[test]
+    #[ignore = "verbose output"]
+    fn view_pkg_schema() {
+        let pkg_schema = schema_for!(PackageHash);
+        println!("{}", serde_json::to_string_pretty(&pkg_schema).unwrap())
+    }
+
+    #[test]
+    #[should_panic]
+    fn read_defn_file_missing() {
+        let schema = Pkg::create_packagehash_schema();
+        let json_file = "tests/nonexistent_file.json";
+        let _p = Pkg::read_defn_file(json_file, &schema).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn read_defn_file_not_valid() {
+        let schema = Pkg::create_packagehash_schema();
+        let json_file = "tests/good-example-config-defn.json";
+        let _p = Pkg::read_defn_file(json_file, &schema).unwrap();
+    }
+
+    #[test]
+    fn read_defn_file_validates() {
+        let schema = Pkg::create_packagehash_schema();
+        let json_file = "tests/test_pkg.json";
+        let p = Pkg::read_defn_file(json_file, &schema).unwrap();
+        assert_eq!(p.len(), 2);
+    }
+
+    #[test]
+    fn load_pkg_no_json() {
+        let schema = Pkg::create_packagehash_schema();
+        let def_path = "src/";
+        let ph = Pkg::load_packages(def_path, &schema);
+        match ph {
+            Some(_) => assert!(false),
+            None => assert!(true),
+        }
+    }
+
+    #[test]
+    fn load_pkg_invalid_json() {
+        let schema = Pkg::create_packagehash_schema();
+        let def_path = "tests/bad-example-config-defn.json";
+        let ph = Pkg::load_packages(def_path, &schema);
+        match ph {
+            Some(_) => assert!(false),
+            None => assert!(true),
+        }
+    }
+
+    #[test]
+    fn load_pkg_valid_json() {
+        let schema = Pkg::create_packagehash_schema();
+        let def_path = "tests/test_pkg.json";
+        let ph = Pkg::load_packages(def_path, &schema);
+        match ph {
+            Some(ph) => assert_eq!(ph.len(), 2),
+            None => assert!(false),
+        }
+    }
+}
 ///
 /// Signalling Panel Definitions
 ///
@@ -666,8 +753,8 @@ pub struct Panel {
     height: u16,
     /// size (in pixels) of a square tile
     tilesize: u16,
-    /// RGB colour definition of panel background
-    colour: u32,
+    /// RGB colour definition of panel background as a HEX string
+    colour: String,
     /// Margin in pixels
     margins: u16,
     //// Border in pixels
@@ -697,7 +784,7 @@ pub struct Track {
     /// Text to be displayed on panel
     label: Option<String>,
     /// CbusState that provides state of track circuit
-    tcstate: String,
+    tcstate: Option<String>,
     /// CbusState that provides state of train detector
     spot: Option<String>,
 }
@@ -727,7 +814,7 @@ pub struct Control {
     /// Display name
     name: String,
     switch: SwitchType,
-    /// Name of CBusState that acutates turnout
+    /// Name of CBusState that actuates turnout
     action: String,
     /// How the turnout currently lies
     tostate: TurnoutState,
@@ -817,7 +904,7 @@ impl PanelList {
             }
             Err(e) => {
                 // Log error text
-                error!("{}", e);
+                eprintln!("{}", e);
                 None
             }
         }
@@ -843,39 +930,52 @@ impl PanelList {
         schema: &JSONSchema,
     ) -> Result<PanelDefinition, CfgError> {
         // Open the file in read-only mode with buffer
-        let file = File::open(path.as_ref())?;
-        let reader = BufReader::new(file);
-
-        let json_value: Value = serde_json::from_reader(reader)?;
-        if schema.is_valid(&json_value) {
-            // Read the JSON contents of the file as an instance of 'Diagram'.
-            let diagram: Diagram = serde_json::from_value(json_value)?;
-            let title = diagram.layout.panel.title;
-            let json_file = path.as_ref().to_path_buf();
-            let panel_entry = PanelDefinition { title, json_file };
-            return Ok(panel_entry);
-        } else {
-            // JSON not valid against schema - log detailed error report
-            let result = schema.validate(&json_value);
-            let pathstr = path.as_ref().to_str().unwrap();
-            if let Err(errors) = result {
-                error!("{} failed validation", pathstr);
-                for error in errors {
-                    error!("{}", error)
+        let f = File::open(path.as_ref());
+        match f {
+            Ok(file) => {
+                let reader = BufReader::new(file);
+                if let Ok(json_value) = serde_json::from_reader(reader) {
+                    if schema.is_valid(&json_value) {
+                        // Read the JSON contents of the file as an instance of 'Diagram'.
+                        if let Ok(diagram) = serde_json::from_value::<Diagram>(json_value) {
+                            let title = diagram.layout.panel.title;
+                            let json_file = path.as_ref().to_path_buf();
+                            let panel_entry = PanelDefinition { title, json_file };
+                            Ok(panel_entry)
+                        } else {
+                            eprintln!("conversion to struct failed");
+                            Err(CfgError::Schema(
+                                "(failed to convert JSON to struct)".to_string(),
+                            ))
+                        }
+                    } else {
+                        // JSON not valid against schema - log detailed error report
+                        let result = schema.validate(&json_value);
+                        let pathstr = path.as_ref().to_str().unwrap();
+                        if let Err(errors) = result {
+                            eprintln!("schema errors");
+                            for error in errors {
+                                eprintln!("{}", error);
+                            }
+                        }
+                        eprintln!("{} failed validation", pathstr);
+                        Err(CfgError::Schema(pathstr.to_string()))
+                    }
+                } else {
+                    eprintln!("reading file as json failed");
+                    Err(CfgError::Schema("(non-utf8 path".to_string()))
                 }
-                return Err(CfgError::Schema(pathstr.to_string()));
             }
+            Err(e) => Err(CfgError::Io(e)),
         }
-        Err(CfgError::Schema("(non-utf8 path".to_string()))
     }
 }
 
 #[cfg(test)]
 mod test_panel_list {
     use super::*;
-    use dotenv::dotenv;
+    use std::fs;
     use std::io::Write;
-    use std::{env, fs};
 
     fn setup_file<P: AsRef<Path>>(test_file: P, data: &str) {
         let mut f = File::create(test_file).expect("file creation failed");
@@ -884,6 +984,13 @@ mod test_panel_list {
 
     fn teardown_file<P: AsRef<Path>>(test_file: P) {
         fs::remove_file(test_file).expect("file deletion failed");
+    }
+
+    #[test]
+    #[ignore = "verbose output"]
+    fn view_diagram_schema() {
+        let dia_schema = schema_for!(Diagram);
+        println!("{}", serde_json::to_string_pretty(&dia_schema).unwrap());
     }
 
     #[test]
@@ -905,16 +1012,58 @@ mod test_panel_list {
 
     #[test]
     #[should_panic]
+    fn read_defn_file_missing() {
+        let schema = PanelList::create_diagram_schema();
+        let json_file = "tests/nonexistent_file.json";
+        let _pd = PanelList::read_defn_file(json_file, &schema).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
     fn read_defn_file_not_valid() {
         let schema = PanelList::create_diagram_schema();
         let json_file = "tests/good-example-config-defn.json";
-        let _pd = PanelList::read_defn_file(json_file, &schema).expect("not JSON for a Diagram ");
+        let _pd = PanelList::read_defn_file(json_file, &schema).unwrap();
     }
+
     #[test]
     fn read_defn_file_validates() {
         let schema = PanelList::create_diagram_schema();
         let json_file = "tests/test_diagram.json";
-        let pd = PanelList::read_defn_file(json_file, &schema).expect("not JSON for a Diagram ");
+        let pd = PanelList::read_defn_file(json_file, &schema).unwrap();
         assert_eq!(pd.title, "Test Diagram");
+    }
+
+    #[test]
+    fn load_panels_no_json() {
+        let schema = PanelList::create_diagram_schema();
+        let panel_dir = "src/";
+        let panel_hash = PanelList::load_panels(panel_dir, &schema);
+        match panel_hash {
+            Some(_) => assert!(false),
+            None => assert!(true),
+        }
+    }
+
+    #[test]
+    fn load_panels_invalid_json() {
+        let schema = PanelList::create_diagram_schema();
+        let panel_dir = "scratch/";
+        let panel_hash = PanelList::load_panels(panel_dir, &schema);
+        match panel_hash {
+            Some(_) => assert!(false),
+            None => assert!(true),
+        }
+    }
+
+    #[test]
+    fn load_panels_one_valid_json() {
+        let schema = PanelList::create_diagram_schema();
+        let panel_dir = "tests/";
+        let panel_hash = PanelList::load_panels(panel_dir, &schema);
+        match panel_hash {
+            Some(ph) => assert_eq!(ph.len(), 1),
+            None => assert!(false),
+        }
     }
 }

@@ -1,0 +1,12 @@
+{
+    "AutoHotSpot": {
+        "cfg_path": "tests",
+        "ini_file": "hotspot_example.cfg",
+        "json_file": "hotspot_example.json"
+    },
+    "CANPiServer": {
+        "cfg_path": "tests",
+        "ini_file": "canpi_example.cfg",
+        "json_file": "canpi_example.json"
+    }
+}
