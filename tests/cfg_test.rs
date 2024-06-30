@@ -1,9 +1,10 @@
-use canpi_config::*;
-use std::io::Write;
-use std::fs;
-use std::fs::File;
-use std::path::Path;
 use canpi_config::ActionBehaviour;
+use canpi_config::*;
+use dotenv::dotenv;
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
+use std::{env, fs};
 
 const CFG_DATA: &str = r#"
         canid=101
@@ -58,6 +59,24 @@ fn teardown_file<P: AsRef<Path>>(test_file: P) {
 }
 
 #[test]
+fn load_configuration_test() {
+    dotenv().ok();
+    let cfg_file = env::var("CFG_FILE").expect("CFG_FILE is not set in .env file");
+    let def_file = env::var("DEF_FILE").expect("DEF_FILE is not set in .env file");
+
+    let mut cfg = Cfg::new();
+    cfg.load_configuration(cfg_file, def_file)
+        .expect("Loading configuration");
+
+    let attr = cfg.read_attribute("router_ssid".to_string());
+    if let Some(a) = attr {
+        assert_eq!(a.current, "home");
+    } else {
+        assert!(false);
+    }
+}
+
+#[test]
 fn write_attr_good() {
     let cfg_file = "scratch/wattr_test.cfg";
     let defn_file = "scratch/wattr_test.json";
@@ -80,7 +99,8 @@ fn write_attr_good() {
         format: "[1-8]".to_string(),
         action: ActionBehaviour::Hide,
     };
-    cfg.write_attribute("start_event_id".to_string(), &new_start_event_id).expect("attribute write failed");
+    cfg.write_attribute("start_event_id".to_string(), &new_start_event_id)
+        .expect("attribute write failed");
     let new_start_event_id = cfg.read_attribute("start_event_id".to_string());
     if let Some(nsei) = new_start_event_id {
         assert_eq!(nsei.prompt, "sTART eVENT iD", "Field 'prompt'");
@@ -103,5 +123,6 @@ fn write_attr_bad() {
         format: "[1-8]".to_string(),
         action: ActionBehaviour::Hide,
     };
-    cfg.write_attribute("start_event_id".to_string(), &new_start_event_id).expect("attribute write failed");
+    cfg.write_attribute("start_event_id".to_string(), &new_start_event_id)
+        .expect("attribute write failed");
 }
