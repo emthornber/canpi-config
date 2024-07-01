@@ -1,10 +1,9 @@
 use canpi_config::ActionBehaviour;
 use canpi_config::*;
-use dotenv::dotenv;
+use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use std::{env, fs};
 
 const CFG_DATA: &str = r#"
         canid=101
@@ -59,21 +58,30 @@ fn teardown_file<P: AsRef<Path>>(test_file: P) {
 }
 
 #[test]
-fn load_configuration_test() {
-    dotenv().ok();
-    let cfg_file = env::var("CFG_FILE").expect("CFG_FILE is not set in .env file");
-    let def_file = env::var("DEF_FILE").expect("DEF_FILE is not set in .env file");
-
-    let mut cfg = Cfg::new();
-    cfg.load_configuration(cfg_file, def_file)
-        .expect("Loading configuration");
-
-    let attr = cfg.read_attribute("router_ssid".to_string());
-    if let Some(a) = attr {
-        assert_eq!(a.current, "home");
+/// Test filtering of attributes by action value via attributes_with_action()
+fn attributes_with_action_test() {
+    let cfg_file = "scratch/attributes_test.cfg";
+    let defn_file = "scratch/attributes_test.json";
+    setup_file(&defn_file, DEFN_DATA);
+    setup_file(&cfg_file, CFG_DATA);
+    let cfg = Cfg::new(&cfg_file, &defn_file);
+    if let Some(config) = cfg.cfg.clone() {
+        assert_eq!(config.len(), 4);
+        let displayable: ConfigHash = cfg.attributes_with_action(ActionBehaviour::Display);
+        assert_eq!(displayable.len(), 2);
+        assert!(displayable.contains_key("canid"));
+        assert!(displayable.contains_key("node_number"));
+        let editable: ConfigHash = cfg.attributes_with_action(ActionBehaviour::Edit);
+        assert_eq!(editable.len(), 1);
+        assert!(editable.contains_key("start_event_id"));
+        let hidden: ConfigHash = cfg.attributes_with_action(ActionBehaviour::Hide);
+        assert_eq!(hidden.len(), 1);
+        assert!(hidden.contains_key("node_mode"));
     } else {
-        assert!(false);
+        assert!(false)
     }
+    teardown_file(&cfg_file);
+    teardown_file(&defn_file);
 }
 
 #[test]
@@ -82,9 +90,7 @@ fn write_attr_good() {
     let defn_file = "scratch/wattr_test.json";
     setup_file(&defn_file, DEFN_DATA);
     setup_file(&cfg_file, CFG_DATA);
-    let mut cfg = Cfg::new();
-    cfg.load_configuration(&cfg_file, &defn_file)
-        .expect("parameter definition failed to load");
+    let mut cfg = Cfg::new(&cfg_file, &defn_file);
     let start_event_id = cfg.read_attribute("start_event_id".to_string());
     if let Some(sei) = start_event_id {
         assert_eq!(sei.prompt, "Start Event Id", "Field 'prompt'");
@@ -114,7 +120,9 @@ fn write_attr_good() {
 #[test]
 #[should_panic]
 fn write_attr_bad() {
-    let mut cfg = Cfg::new();
+    let cfg_file = "scratch/wattr_test.cfg";
+    let defn_file = "scratch/wattr_test.json";
+    let mut cfg = Cfg::new(&cfg_file, &defn_file);
     let new_start_event_id = canpi_config::Attribute {
         prompt: "sTART eVENT iD".to_string(),
         tooltip: "new tooltip".to_string(),

@@ -113,9 +113,10 @@ pub struct Attribute {
 pub type ConfigHash = HashMap<String, Attribute>;
 
 /// The structure that holds the definition of configuration items
+#[allow(dead_code)]
 pub struct Cfg {
     schema: JSONSchema,
-    cfg: Option<ConfigHash>,
+    pub cfg: Option<ConfigHash>,
 }
 
 impl Cfg {
@@ -124,26 +125,100 @@ impl Cfg {
     /// The type definition of ConfigHash is used to create a compiled JSON schema that will be used
     /// to validate the Attribute definitions being loaded to ConfigHash
     ///
-    /// Note: load_configuration must be called to fully initialise the structure
-    #[allow(clippy::new_without_default)]
-    pub fn new() -> Cfg {
-        let cfg_schema = Self::create_confighash_schema();
-        Cfg {
-            schema: cfg_schema,
-            cfg: None,
-        }
+    pub fn new<P: AsRef<Path>>(cfg_path: P, def_path: P) -> Cfg {
+        let schema = Self::create_confighash_schema();
+        let cfg = Self::load_configuration(cfg_path, def_path, &schema);
+        Cfg { schema, cfg }
+    }
+
+    /// Create a compiled JSON schema from Attribute definition via type alias ConfigHash
+    fn create_confighash_schema() -> JSONSchema {
+        let attr_schema = schema_for!(ConfigHash);
+        create_json_schema(attr_schema)
     }
 
     /// Load the attribute definitions from `def_path` and then update the current values from `cfg_path`
-    pub fn load_configuration<P: AsRef<Path>>(
-        &mut self,
+    fn load_configuration<P: AsRef<Path>>(
         cfg_path: P,
         def_path: P,
-    ) -> Result<(), CfgError> {
-        let defn = Self::read_defn_file(def_path, &self.schema)?;
-        self.update_cfg_from_defn(defn, cfg_path)?;
+        schema: &JSONSchema,
+    ) -> Option<ConfigHash> {
+        let attr = Self::read_defn_file(def_path, &schema);
+        match attr {
+            Ok(defn) => Self::update_cfg_from_defn(defn, cfg_path),
+            Err(e) => {
+                eprintln!("{}", e);
+                None
+            }
+        }
+    }
 
-        Ok(())
+    /// Read the contents of a file as JSON and, if valid against the schema, return an instance
+    /// of 'ConfigHash'
+    fn read_defn_file<P: AsRef<Path>>(
+        path: P,
+        schema: &JSONSchema,
+    ) -> Result<ConfigHash, CfgError> {
+        // Open the file in read-only mode with buffer
+        let f = File::open(path.as_ref());
+        match f {
+            Ok(file) => {
+                let reader = BufReader::new(file);
+
+                if let Ok(json_value) = serde_json::from_reader(reader) {
+                    if schema.is_valid(&json_value) {
+                        // Read the JSON contents of the file as an instance of 'ConfigHash'.
+                        if let Ok(cfg) = serde_json::from_value(json_value) {
+                            Ok(cfg)
+                        } else {
+                            eprintln!("conversion to struct failed");
+                            Err(CfgError::Schema(
+                                "(failed to convert JSON to struct)".to_string(),
+                            ))
+                        }
+                    } else {
+                        let result = schema.validate(&json_value);
+                        let pathstr = path.as_ref().to_str().unwrap();
+                        if let Err(errors) = result {
+                            eprintln!("schema errors");
+                            for error in errors {
+                                eprintln!("{}", error)
+                            }
+                        }
+                        eprintln!("{} failed validation", pathstr);
+                        Err(CfgError::Schema(pathstr.to_string()))
+                    }
+                } else {
+                    eprintln!("reading file as json failed");
+                    Err(CfgError::Schema("(non-utf8 path)".to_string()))
+                }
+            }
+            Err(e) => Err(CfgError::Io(e)),
+        }
+    }
+
+    /// Read the INI format file 'path' and create a ConfigHash from the matching entries in the
+    /// definition file and update the 'current' field with value from 'path'.
+    fn update_cfg_from_defn<P: AsRef<Path>>(defn: ConfigHash, path: P) -> Option<ConfigHash> {
+        // Read existing configuration file
+        if let Ok(ini) = Ini::load_from_file(path) {
+            // Create new ConfigHash to hold configuration
+            let mut cfg = ConfigHash::new();
+            let properties = ini.general_section();
+            for (k, v) in properties.iter() {
+                let attr = defn.get(k);
+                if let Some(aref) = attr {
+                    let mut a = aref.clone();
+                    a.current = v.to_string();
+                    cfg.insert(k.to_string(), a);
+                } else {
+                    info!("Key '{}' not defined in configuration", k);
+                }
+            }
+            Some(cfg)
+        } else {
+            Some(defn)
+        }
     }
 
     /// Get the attribute definition for the configuration item defined by `key`
@@ -169,41 +244,6 @@ impl Cfg {
             return Ok(());
         }
         Err(CfgError::Cfg())
-    }
-
-    /// Create a compiled JSON schema from Attribute definition via type alias ConfigHash
-    fn create_confighash_schema() -> JSONSchema {
-        let attr_schema = schema_for!(ConfigHash);
-        create_json_schema(attr_schema)
-    }
-
-    /// Read the contents of a file as JSON and, if valid against the schema, return an instance
-    /// of 'ConfigHash'
-    fn read_defn_file<P: AsRef<Path>>(
-        path: P,
-        schema: &JSONSchema,
-    ) -> Result<ConfigHash, CfgError> {
-        // Open the file in read-only mode with buffer
-        let file = File::open(path.as_ref())?;
-        let reader = BufReader::new(file);
-
-        let json_value: Value = serde_json::from_reader(reader)?;
-        if schema.is_valid(&json_value) {
-            // Read the JSON contents of the file as an instance of 'ConfigHash'.
-            let cfg = serde_json::from_value(json_value)?;
-            return Ok(cfg);
-        } else {
-            let result = schema.validate(&json_value);
-            let pathstr = path.as_ref().to_str().unwrap();
-            if let Err(errors) = result {
-                error!("{} failed validation", pathstr);
-                for error in errors {
-                    error!("{}", error)
-                }
-                return Err(CfgError::Schema(pathstr.to_string()));
-            }
-        }
-        Err(CfgError::Schema("(non-utf8 path".to_string()))
     }
 
     /// Filters the attributes by action
@@ -247,32 +287,6 @@ impl Cfg {
             }
             ini.write_to_file(path)?;
         }
-        Ok(())
-    }
-
-    /// Read the INI format file 'path' and create a ConfigHash from the matching entries in the
-    /// definition file and update the 'current' field with value from 'path'.
-    fn update_cfg_from_defn<P: AsRef<Path>>(
-        &mut self,
-        defn: ConfigHash,
-        path: P,
-    ) -> Result<(), CfgError> {
-        // Read existing configuration file
-        let ini = Ini::load_from_file(path)?;
-        // Create new ConfigHash to hold configuration
-        let mut cfg = ConfigHash::new();
-        let properties = ini.general_section();
-        for (k, v) in properties.iter() {
-            let attr = defn.get(k);
-            if let Some(aref) = attr {
-                let mut a = aref.clone();
-                a.current = v.to_string();
-                cfg.insert(k.to_string(), a);
-            } else {
-                info!("Key '{}' not defined in configuration", k);
-            }
-        }
-        self.cfg = Some(cfg);
         Ok(())
     }
 }
@@ -392,22 +406,51 @@ mod test_cfg {
     }
 
     #[test]
-    /// Test creating a ConfigHash
-    fn single_good_vector() {
-        let defn_file = "scratch/single_good_vector.json";
-        setup_file(&defn_file, DEFN_DATA);
-        let schema = Cfg::create_confighash_schema();
-        Cfg::read_defn_file(&defn_file, &schema).expect("parameter definition failed to load");
-        teardown_file(&defn_file);
+    #[ignore = "verbose output"]
+    fn view_generated_schema() {
+        let attr_schema = schema_for!(ConfigHash);
+        println!("{}", serde_json::to_string_pretty(&attr_schema).unwrap());
     }
 
     #[test]
     #[should_panic]
-    fn single_malformed_vector() {
+    fn read_defn_file_missing() {
+        let schema = Cfg::create_confighash_schema();
+        let json_file = "tests/nonexistent_file.json";
+        let _p = Cfg::read_defn_file(json_file, &schema).unwrap();
+    }
+
+    #[test]
+    fn read_defn_file_not_valid() {
         let defn_file = "scratch/single_malformed_vector.json";
         setup_file(&defn_file, BAD_DATA);
         let schema = Cfg::create_confighash_schema();
-        Cfg::read_defn_file(&defn_file, &schema).expect("parameter definition failed to load");
+        let bad_result = Cfg::read_defn_file(&defn_file, &schema);
+        teardown_file(&defn_file);
+        match bad_result {
+            Ok(_) => assert!(false),
+            Err(e) => {
+                eprintln!("{}", e);
+                assert!(true);
+            }
+        }
+    }
+
+    #[test]
+    /// Test creating a ConfigHash
+    fn read_defn_file_validates() {
+        let defn_file = "scratch/single_good_vector.json";
+        setup_file(&defn_file, DEFN_DATA);
+        let schema = Cfg::create_confighash_schema();
+        let good_result = Cfg::read_defn_file(&defn_file, &schema);
+        teardown_file(&defn_file);
+        match good_result {
+            Ok(_) => assert!(true),
+            Err(e) => {
+                eprintln!("{}", e);
+                assert!(false);
+            }
+        }
     }
 
     #[test]
@@ -417,9 +460,7 @@ mod test_cfg {
         let defn_file = "scratch/update_test.json";
         setup_file(&defn_file, DEFN_DATA);
         setup_file(&cfg_file, CFG_DATA);
-        let mut cfg = Cfg::new();
-        cfg.load_configuration(&cfg_file, &defn_file)
-            .expect("parameter definition failed to load");
+        let cfg = Cfg::new(&cfg_file, &defn_file);
         let ini = Ini::load_from_file(&cfg_file).expect("failed to load .cfg file");
         if let Some(config) = cfg.cfg.clone() {
             let properties = ini.section(None::<String>);
@@ -441,49 +482,36 @@ mod test_cfg {
     }
 
     #[test]
-    /// Test filtering of attributes by action value via attributes_with_action()
-    fn attributes_with_action_test() {
-        let cfg_file = "scratch/attributes_test.cfg";
-        let defn_file = "scratch/attributes_test.json";
-        setup_file(&defn_file, DEFN_DATA);
-        setup_file(&cfg_file, CFG_DATA);
-        let mut cfg = Cfg::new();
-        cfg.load_configuration(&cfg_file, &defn_file)
-            .expect("config failed to load");
-        if let Some(config) = cfg.cfg.clone() {
-            assert_eq!(config.len(), 4);
-            let displayable: ConfigHash = cfg.attributes_with_action(ActionBehaviour::Display);
-            assert_eq!(displayable.len(), 2);
-            assert!(displayable.contains_key("canid"));
-            assert!(displayable.contains_key("node_number"));
-            let editable: ConfigHash = cfg.attributes_with_action(ActionBehaviour::Edit);
-            assert_eq!(editable.len(), 1);
-            assert!(editable.contains_key("start_event_id"));
-            let hidden: ConfigHash = cfg.attributes_with_action(ActionBehaviour::Hide);
-            assert_eq!(hidden.len(), 1);
-            assert!(hidden.contains_key("node_mode"));
-        } else {
-            assert!(false)
-        }
-        teardown_file(&cfg_file);
-        teardown_file(&defn_file);
-    }
+    fn load_configuration_test() {
+        dotenv().ok();
+        let cfg_file = env::var("CFG_FILE").expect("CFG_FILE is not set in .env file");
+        let def_file = env::var("DEF_FILE").expect("DEF_FILE is not set in .env file");
 
-    #[test]
-    #[ignore = "verbose output"]
-    fn view_generated_schema() {
-        let attr_schema = schema_for!(ConfigHash);
-        println!("{}", serde_json::to_string_pretty(&attr_schema).unwrap());
+        let schema = Cfg::create_confighash_schema();
+        let config_hash = Cfg::load_configuration(cfg_file, def_file, &schema);
+
+        match config_hash {
+            Some(ch) => {
+                let attr = ch.get("router_ssid");
+                if let Some(a) = attr {
+                    assert_eq!(a.current, "home");
+                } else {
+                    assert!(false);
+                }
+            }
+            None => {
+                eprintln!("Config Hash not created");
+                assert!(false);
+            }
+        }
     }
 
     #[test]
     fn write_ini_file() {
         dotenv().ok();
-        let mut cfg = Cfg::new();
         let mut cfg_file = env::var("CFG_FILE").expect("CFG_FILE is not set in .env file");
         let def_file = env::var("DEF_FILE").expect("DEF_FILE is not set in .env file");
-        cfg.load_configuration(cfg_file.clone(), def_file)
-            .expect("config hash populated");
+        let cfg = Cfg::new(cfg_file.clone(), def_file);
         cfg_file.push_str(".new");
         cfg.write_cfg_file(cfg_file, Some(true))
             .expect("Failed to write cfg file");
@@ -509,6 +537,7 @@ pub struct Package {
 pub type PackageHash = HashMap<String, Package>;
 
 /// The structure that holds the definition of package items
+#[allow(dead_code)]
 pub struct Pkg {
     schema: JSONSchema,
     pub packages: Option<PackageHash>,
@@ -520,7 +549,6 @@ impl Pkg {
     /// The type definition of PackageHash is used to create a compiled JSON schema that will be used
     /// to validate the Package definitions being loaded to PackageHash
     ///
-    /// Note: load_packages must be called to fully initialise the structure
     pub fn new<P: AsRef<Path>>(def_path: P) -> Pkg {
         let schema = Self::create_packagehash_schema();
         let packages = Self::load_packages(def_path, &schema);
@@ -845,6 +873,7 @@ pub struct Diagram {
 }
 
 #[derive(Clone, Deserialize, Debug, JsonSchema)]
+#[allow(dead_code)]
 pub struct PanelDefinition {
     title: String,
     json_file: PathBuf,
@@ -854,6 +883,7 @@ pub struct PanelDefinition {
 pub type PanelHash = HashMap<u8, PanelDefinition>;
 
 /// The definition of available control panels
+#[allow(dead_code)]
 pub struct PanelList {
     schema: JSONSchema,
     pub panels: Option<PanelHash>,
@@ -963,7 +993,7 @@ impl PanelList {
                     }
                 } else {
                     eprintln!("reading file as json failed");
-                    Err(CfgError::Schema("(non-utf8 path".to_string()))
+                    Err(CfgError::Schema("(non-utf8 path)".to_string()))
                 }
             }
             Err(e) => Err(CfgError::Io(e)),
