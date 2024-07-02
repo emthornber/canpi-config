@@ -505,17 +505,6 @@ mod test_cfg {
             }
         }
     }
-
-    #[test]
-    fn write_ini_file() {
-        dotenv().ok();
-        let mut cfg_file = env::var("CFG_FILE").expect("CFG_FILE is not set in .env file");
-        let def_file = env::var("DEF_FILE").expect("DEF_FILE is not set in .env file");
-        let cfg = Cfg::new(cfg_file.clone(), def_file);
-        cfg_file.push_str(".new");
-        cfg.write_cfg_file(cfg_file, Some(true))
-            .expect("Failed to write cfg file");
-    }
 }
 
 ///

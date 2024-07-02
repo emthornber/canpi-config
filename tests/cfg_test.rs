@@ -1,9 +1,10 @@
 use canpi_config::ActionBehaviour;
 use canpi_config::*;
-use std::fs;
+use dotenv::dotenv;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
+use std::{env, fs};
 
 const CFG_DATA: &str = r#"
         canid=101
@@ -133,4 +134,15 @@ fn write_attr_bad() {
     };
     cfg.write_attribute("start_event_id".to_string(), &new_start_event_id)
         .expect("attribute write failed");
+}
+
+#[test]
+fn write_ini_file() {
+    dotenv().ok();
+    let mut cfg_file = env::var("CFG_FILE").expect("CFG_FILE is not set in .env file");
+    let def_file = env::var("DEF_FILE").expect("DEF_FILE is not set in .env file");
+    let cfg = Cfg::new(cfg_file.clone(), def_file);
+    cfg_file.push_str(".new");
+    cfg.write_cfg_file(cfg_file, Some(true))
+        .expect("Failed to write cfg file");
 }
