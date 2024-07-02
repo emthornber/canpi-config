@@ -567,7 +567,13 @@ impl Pkg {
         // Read JSON file
         let pkg = Self::read_defn_file(def_path, &schema);
         match pkg {
-            Ok(packages) => Some(packages),
+            Ok(packages) => {
+                if packages.len() > 0 {
+                    Some(packages)
+                } else {
+                    None
+                }
+            }
             Err(e) => {
                 //log error text
                 eprintln!("{}", e);
