@@ -125,7 +125,7 @@ impl Cfg {
     /// The type definition of ConfigHash is used to create a compiled JSON schema that will be used
     /// to validate the Attribute definitions being loaded to ConfigHash
     ///
-    pub fn new<P: AsRef<Path>>(cfg_path: P, def_path: P) -> Cfg {
+    pub fn new<P: AsRef<Path> + std::fmt::Display>(cfg_path: P, def_path: P) -> Cfg {
         let schema = Self::create_confighash_schema();
         let cfg = Self::load_configuration(cfg_path, def_path, &schema);
         Cfg { schema, cfg }
@@ -138,7 +138,7 @@ impl Cfg {
     }
 
     /// Load the attribute definitions from `def_path` and then update the current values from `cfg_path`
-    fn load_configuration<P: AsRef<Path>>(
+    fn load_configuration<P: AsRef<Path> + std::fmt::Display>(
         cfg_path: P,
         def_path: P,
         schema: &JSONSchema,
@@ -147,7 +147,7 @@ impl Cfg {
         match attr {
             Ok(defn) => Self::update_cfg_from_defn(defn, cfg_path),
             Err(e) => {
-                eprintln!("{}", e);
+                error!("{}", e);
                 None
             }
         }
@@ -155,7 +155,7 @@ impl Cfg {
 
     /// Read the contents of a file as JSON and, if valid against the schema, return an instance
     /// of 'ConfigHash'
-    fn read_defn_file<P: AsRef<Path>>(
+    fn read_defn_file<P: AsRef<Path> + std::fmt::Display>(
         path: P,
         schema: &JSONSchema,
     ) -> Result<ConfigHash, CfgError> {
@@ -171,7 +171,7 @@ impl Cfg {
                         if let Ok(cfg) = serde_json::from_value(json_value) {
                             Ok(cfg)
                         } else {
-                            eprintln!("conversion to struct failed");
+                            error!("conversion to struct failed for {}", path);
                             Err(CfgError::Schema(
                                 "(failed to convert JSON to struct)".to_string(),
                             ))
@@ -180,16 +180,16 @@ impl Cfg {
                         let result = schema.validate(&json_value);
                         let pathstr = path.as_ref().to_str().unwrap();
                         if let Err(errors) = result {
-                            eprintln!("schema errors");
+                            error!("schema errors");
                             for error in errors {
-                                eprintln!("{}", error)
+                                error!("{}", error)
                             }
                         }
-                        eprintln!("{} failed validation", pathstr);
+                        error!("{} failed validation", pathstr);
                         Err(CfgError::Schema(pathstr.to_string()))
                     }
                 } else {
-                    eprintln!("reading file as json failed");
+                    error!("reading file {} as json failed", path);
                     Err(CfgError::Schema("(non-utf8 path)".to_string()))
                 }
             }
@@ -281,8 +281,8 @@ impl Cfg {
             }
             if do_backup {
                 match backup(&path) {
-                    Ok(backup_path) => println!("Backup created: {:?}", backup_path),
-                    Err(err) => eprintln!("Failed to create backup: {:?}", err),
+                    Ok(backup_path) => info!("Backup created: {:?}", backup_path),
+                    Err(err) => error!("Failed to create backup: {:?}", err),
                 }
             }
             ini.write_to_file(path)?;
@@ -295,6 +295,8 @@ impl Cfg {
 mod test_cfg {
     use super::*;
     use dotenv::dotenv;
+    use env_logger::Target;
+    use log::{error, info, LevelFilter};
     use std::io::Write;
     use std::{env, fs};
 
@@ -376,13 +378,28 @@ mod test_cfg {
                   }
         }"#;
 
-    fn setup_file<P: AsRef<Path>>(test_file: P, data: &str) {
-        let mut f = File::create(test_file).expect("file creation failed");
-        f.write_all(data.as_bytes()).expect("file write failed");
+    fn init_logging() {
+        let _ = env_logger::builder()
+            .target(Target::Stdout)
+            .filter_level(LevelFilter::max())
+            .is_test(true)
+            .try_init();
     }
 
-    fn teardown_file<P: AsRef<Path>>(test_file: P) {
-        fs::remove_file(test_file).expect("file deletion failed");
+    fn setup_file<P: AsRef<Path> + std::fmt::Display>(test_file: P, data: &str) {
+        if let Ok(mut f) = File::create(&test_file) {
+            if let Err(e) = f.write_all(data.as_bytes()) {
+                error!("{}: file {} write failed", e, test_file);
+            }
+        } else {
+            error!("file {} creation failed", test_file);
+        }
+    }
+
+    fn teardown_file<P: AsRef<Path> + std::fmt::Display>(test_file: P) {
+        if let Err(e) = fs::remove_file(&test_file) {
+            error!("{}: file {} deletion failed", e, test_file);
+        }
     }
 
     #[test]
@@ -398,18 +415,28 @@ mod test_cfg {
             "action": "Display"
         }"#;
 
-        // Parse the string of data into an Attribute object.
-        let a: Attribute = serde_json::from_str(data).expect("Failed to deserialize");
+        // Initialise Logger
+        init_logging();
 
-        // println!("Attribute is {} ({})", a.attribute, a.tooltip);
-        assert_eq!(a.action, ActionBehaviour::Display);
+        // Parse the string of data into an Attribute object.
+        let a: Result<Attribute, serde_json::Error> = serde_json::from_str(data);
+        match a {
+            Ok(a) => {
+                info!("Attribute is {} ({})", a.prompt, a.tooltip);
+                assert_eq!(a.action, ActionBehaviour::Display);
+            }
+            Err(e) => error!("{}: Failed to deserialize", e),
+        }
     }
 
     #[test]
     #[ignore = "verbose output"]
     fn view_generated_schema() {
+        // Initialise Logger
+        init_logging();
+
         let attr_schema = schema_for!(ConfigHash);
-        println!("{}", serde_json::to_string_pretty(&attr_schema).unwrap());
+        info!("{}", serde_json::to_string_pretty(&attr_schema).unwrap());
     }
 
     #[test]
@@ -422,6 +449,9 @@ mod test_cfg {
 
     #[test]
     fn read_defn_file_not_valid() {
+        // Initialise Logger
+        init_logging();
+
         let defn_file = "scratch/single_malformed_vector.json";
         setup_file(&defn_file, BAD_DATA);
         let schema = Cfg::create_confighash_schema();
@@ -430,7 +460,7 @@ mod test_cfg {
         match bad_result {
             Ok(_) => assert!(false),
             Err(e) => {
-                eprintln!("{}", e);
+                error!("{}", e);
                 assert!(true);
             }
         }
@@ -439,6 +469,9 @@ mod test_cfg {
     #[test]
     /// Test creating a ConfigHash
     fn read_defn_file_validates() {
+        // Initialise Logger
+        init_logging();
+
         let defn_file = "scratch/single_good_vector.json";
         setup_file(&defn_file, DEFN_DATA);
         let schema = Cfg::create_confighash_schema();
@@ -447,7 +480,7 @@ mod test_cfg {
         match good_result {
             Ok(_) => assert!(true),
             Err(e) => {
-                eprintln!("{}", e);
+                error!("{}", e);
                 assert!(false);
             }
         }
@@ -456,53 +489,65 @@ mod test_cfg {
     #[test]
     /// Test the updating of current values from the .cfg file
     fn update_with_cfg_test() {
+        // Initialise Logger
+        init_logging();
+
         let cfg_file = "scratch/update_test.cfg";
         let defn_file = "scratch/update_test.json";
         setup_file(&defn_file, DEFN_DATA);
         setup_file(&cfg_file, CFG_DATA);
         let cfg = Cfg::new(&cfg_file, &defn_file);
-        let ini = Ini::load_from_file(&cfg_file).expect("failed to load .cfg file");
-        if let Some(config) = cfg.cfg.clone() {
-            let properties = ini.section(None::<String>);
-            if let Some(p) = properties {
-                for (k, v) in p.iter() {
-                    let attr = config.get(k);
-                    if let Some(a) = attr {
-                        assert_eq!(a.current, v.to_string(), "attribute {} not updated", k);
-                    } else {
-                        assert!(false, "attribute {} missing", k);
-                    }
-                }
-            }
-        } else {
-            assert!(false, "Cfg.cfg is 'None'");
-        }
+        let ini = Ini::load_from_file(&cfg_file);
         teardown_file(&cfg_file);
         teardown_file(&defn_file);
+        match ini {
+            Ok(ini) => {
+                if let Some(config) = cfg.cfg.clone() {
+                    let properties = ini.section(None::<String>);
+                    if let Some(p) = properties {
+                        for (k, v) in p.iter() {
+                            let attr = config.get(k);
+                            if let Some(a) = attr {
+                                assert_eq!(a.current, v.to_string(), "attribute {} not updated", k);
+                            } else {
+                                assert!(false, "attribute {} missing", k);
+                            }
+                        }
+                    }
+                } else {
+                    assert!(false, "Cfg.cfg is 'None'");
+                }
+            }
+            Err(_) => assert!(false, "failed to load .cfg file"),
+        }
     }
 
     #[test]
     fn load_configuration_test() {
+        // Initialise Logger
+        init_logging();
+
         dotenv().ok();
-        let cfg_file = env::var("CFG_FILE").expect("CFG_FILE is not set in .env file");
-        let def_file = env::var("DEF_FILE").expect("DEF_FILE is not set in .env file");
-
-        let schema = Cfg::create_confighash_schema();
-        let config_hash = Cfg::load_configuration(cfg_file, def_file, &schema);
-
-        match config_hash {
-            Some(ch) => {
-                let attr = ch.get("router_ssid");
-                if let Some(a) = attr {
-                    assert_eq!(a.current, "home");
-                } else {
-                    assert!(false);
+        if let Ok(cfg_file) = env::var("CFG_FILE") {
+            if let Ok(def_file) = env::var("DEF_FILE") {
+                let schema = Cfg::create_confighash_schema();
+                let config_hash = Cfg::load_configuration(cfg_file, def_file, &schema);
+                match config_hash {
+                    Some(ch) => {
+                        let attr = ch.get("router_ssid");
+                        if let Some(a) = attr {
+                            assert_eq!(a.current, "home");
+                        } else {
+                            assert!(false);
+                        }
+                    }
+                    None => assert!(false, "Config Hash not created"),
                 }
+            } else {
+                assert!(false, "DEF_FILE is not set in .env file");
             }
-            None => {
-                eprintln!("Config Hash not created");
-                assert!(false);
-            }
+        } else {
+            assert!(false, "CFG_FILE is not set in .env file");
         }
     }
 }
@@ -538,7 +583,7 @@ impl Pkg {
     /// The type definition of PackageHash is used to create a compiled JSON schema that will be used
     /// to validate the Package definitions being loaded to PackageHash
     ///
-    pub fn new<P: AsRef<Path>>(def_path: P) -> Pkg {
+    pub fn new<P: AsRef<Path> + std::fmt::Display>(def_path: P) -> Pkg {
         let schema = Self::create_packagehash_schema();
         let packages = Self::load_packages(def_path, &schema);
         Pkg { schema, packages }
@@ -552,7 +597,10 @@ impl Pkg {
     }
 
     /// Load the package definitions from `def_path`
-    fn load_packages<P: AsRef<Path>>(def_path: P, schema: &JSONSchema) -> Option<PackageHash> {
+    fn load_packages<P: AsRef<Path> + std::fmt::Display>(
+        def_path: P,
+        schema: &JSONSchema,
+    ) -> Option<PackageHash> {
         // Read JSON file
         let pkg = Self::read_defn_file(def_path, &schema);
         match pkg {
@@ -565,7 +613,7 @@ impl Pkg {
             }
             Err(e) => {
                 //log error text
-                eprintln!("{}", e);
+                error!("{}", e);
                 None
             }
         }
@@ -573,7 +621,7 @@ impl Pkg {
 
     /// Read the contents of a file as JSON and, if valid against the schema, return an instance
     /// of 'PackageHash'
-    fn read_defn_file<P: AsRef<Path>>(
+    fn read_defn_file<P: AsRef<Path> + std::fmt::Display>(
         path: P,
         schema: &JSONSchema,
     ) -> Result<PackageHash, CfgError> {
@@ -589,7 +637,7 @@ impl Pkg {
                         if let Ok(pkg) = serde_json::from_value(json_value) {
                             Ok(pkg)
                         } else {
-                            eprintln!("conversion to struct failed");
+                            error!("conversion to struct failed for {}", path);
                             Err(CfgError::Schema(
                                 "(failed to convert JSON to struct)".to_string(),
                             ))
@@ -598,16 +646,16 @@ impl Pkg {
                         let result = schema.validate(&json_value);
                         let pathstr = path.as_ref().to_str().unwrap();
                         if let Err(errors) = result {
-                            eprintln!("schema errors");
+                            error!("schema errors");
                             for error in errors {
-                                eprintln!("{}", error);
+                                error!("{}", error);
                             }
                         }
-                        eprintln!("{} failed validation", pathstr);
+                        error!("{} failed validation", pathstr);
                         Err(CfgError::Schema(pathstr.to_string()))
                     }
                 } else {
-                    eprintln!("reading file as json failed");
+                    error!("reading file {} as json failed", path);
                     Err(CfgError::Schema("(non-utf8 path)".to_string()))
                 }
             }
@@ -619,12 +667,25 @@ impl Pkg {
 #[cfg(test)]
 mod test_pkg {
     use super::*;
+    use env_logger::Target;
+    use log::{info, LevelFilter};
+
+    fn init_logging() {
+        let _ = env_logger::builder()
+            .target(Target::Stdout)
+            .filter_level(LevelFilter::max())
+            .is_test(true)
+            .try_init();
+    }
 
     #[test]
     #[ignore = "verbose output"]
     fn view_pkg_schema() {
+        // Initialise Logger
+        init_logging();
+
         let pkg_schema = schema_for!(PackageHash);
-        println!("{}", serde_json::to_string_pretty(&pkg_schema).unwrap())
+        info!("{}", serde_json::to_string_pretty(&pkg_schema).unwrap())
     }
 
     #[test]
@@ -929,7 +990,7 @@ impl PanelList {
             }
             Err(e) => {
                 // Log error text
-                eprintln!("{}", e);
+                error!("{}", e);
                 None
             }
         }
@@ -950,12 +1011,12 @@ impl PanelList {
 
     /// Read the contents of a file as JSON and, if valid against the schema,
     /// return an instance of 'PanelDefinition'
-    fn read_defn_file<P: AsRef<Path>>(
-        path: P,
+    fn read_defn_file(
+        json_file: PathBuf,
         schema: &JSONSchema,
     ) -> Result<PanelDefinition, CfgError> {
         // Open the file in read-only mode with buffer
-        let f = File::open(path.as_ref());
+        let f = File::open(json_file.as_path());
         match f {
             Ok(file) => {
                 let reader = BufReader::new(file);
@@ -964,11 +1025,10 @@ impl PanelList {
                         // Read the JSON contents of the file as an instance of 'Diagram'.
                         if let Ok(diagram) = serde_json::from_value::<Diagram>(json_value) {
                             let title = diagram.layout.panel.title;
-                            let json_file = path.as_ref().to_path_buf();
                             let panel_entry = PanelDefinition { title, json_file };
                             Ok(panel_entry)
                         } else {
-                            eprintln!("conversion to struct failed");
+                            error!("conversion to struct failed for {}", json_file.display());
                             Err(CfgError::Schema(
                                 "(failed to convert JSON to struct)".to_string(),
                             ))
@@ -976,18 +1036,17 @@ impl PanelList {
                     } else {
                         // JSON not valid against schema - log detailed error report
                         let result = schema.validate(&json_value);
-                        let pathstr = path.as_ref().to_str().unwrap();
                         if let Err(errors) = result {
-                            eprintln!("schema errors");
+                            error!("schema errors");
                             for error in errors {
-                                eprintln!("{}", error);
+                                error!("{}", error);
                             }
                         }
-                        eprintln!("{} failed validation", pathstr);
-                        Err(CfgError::Schema(pathstr.to_string()))
+                        error!("{} failed validation", json_file.display());
+                        Err(CfgError::Schema(json_file.display().to_string()))
                     }
                 } else {
-                    eprintln!("reading file as json failed");
+                    error!("reading file {} as json failed", json_file.display());
                     Err(CfgError::Schema("(non-utf8 path)".to_string()))
                 }
             }
@@ -999,8 +1058,18 @@ impl PanelList {
 #[cfg(test)]
 mod test_panel_list {
     use super::*;
+    use env_logger::Target;
+    use log::{info, LevelFilter};
     use std::fs;
     use std::io::Write;
+
+    fn init_logging() {
+        let _ = env_logger::builder()
+            .target(Target::Stdout)
+            .filter_level(LevelFilter::max())
+            .is_test(true)
+            .try_init();
+    }
 
     fn setup_file<P: AsRef<Path>>(test_file: P, data: &str) {
         let mut f = File::create(test_file).expect("file creation failed");
@@ -1014,8 +1083,11 @@ mod test_panel_list {
     #[test]
     #[ignore = "verbose output"]
     fn view_diagram_schema() {
+        // Initialise Logger
+        init_logging();
+
         let dia_schema = schema_for!(Diagram);
-        println!("{}", serde_json::to_string_pretty(&dia_schema).unwrap());
+        info!("{}", serde_json::to_string_pretty(&dia_schema).unwrap());
     }
 
     #[test]
@@ -1031,30 +1103,30 @@ mod test_panel_list {
         setup_file(json_file, "{}");
         let panel_dir = "scratch/";
         let pf = PanelList::find_panel_definitions(&panel_dir).unwrap();
+        teardown_file(json_file);
         assert!(pf.len() > 0);
-        teardown_file(json_file)
     }
 
     #[test]
     #[should_panic]
     fn read_defn_file_missing() {
         let schema = PanelList::create_diagram_schema();
-        let json_file = "tests/nonexistent_file.json";
-        let _pd = PanelList::read_defn_file(json_file, &schema).unwrap();
+        let json_file = PathBuf::from("tests/nonexistent_file.json");
+        let _ = PanelList::read_defn_file(json_file, &schema).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn read_defn_file_not_valid() {
         let schema = PanelList::create_diagram_schema();
-        let json_file = "tests/good-example-config-defn.json";
-        let _pd = PanelList::read_defn_file(json_file, &schema).unwrap();
+        let json_file = PathBuf::from("tests/good-example-config-defn.json");
+        let _ = PanelList::read_defn_file(json_file, &schema).unwrap();
     }
 
     #[test]
     fn read_defn_file_validates() {
         let schema = PanelList::create_diagram_schema();
-        let json_file = "tests/test_diagram.json";
+        let json_file = PathBuf::from("tests/test_diagram.json");
         let pd = PanelList::read_defn_file(json_file, &schema).unwrap();
         assert_eq!(pd.title, "Test Diagram");
     }
