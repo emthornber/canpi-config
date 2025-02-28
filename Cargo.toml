@@ -1,6 +1,6 @@
 [package]
 name = "canpi-config"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["Mark Thornber <mark.thornber@merg.org.uk>"]
 edition = "2018"
 
@@ -17,22 +17,22 @@ required-features = []
 include_dir = "0.7.2"
 output = "*"
 # Data serialisation library
-serde = { version = "1", features = ["derive"] }
-serde_json = "1.0.72"
+serde = { version = "1.0.215", features = ["derive"] }
+serde_json = "1.0.133"
 serde_test = "1.0.130"
 # JSON libraries
-jsonschema = "0.18.0"
-schemars = "0.8.10"
+jsonschema = "0.18.3"
+schemars = "0.8.21"
 # Environment variable access libraries
 dotenv = "0.15.0"
 # .ini file library
 #configparser = "3.0.0"
 rust-ini = "0.21.0"
 # Error handling
-thiserror = "1.0.30"
-anyhow = "1.0.61"
-log = "0.4.21"
+thiserror = "1.0.69"
+anyhow = "1.0.93"
+log = "0.4.22"
 # Create file backup
 backitup = "0.1.0"
 glob = "0.3.1"
-env_logger = "0.11.3"
+env_logger = "0.11.5"
