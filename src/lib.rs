@@ -104,6 +104,7 @@ pub struct Attribute {
 
 /// Type alias based on a HashMap
 pub type ConfigHash = HashMap<String, Attribute>;
+pub type IniHash = HashMap<String, String>;
 
 /// The structure that holds the definition of configuration items
 #[allow(dead_code)]
@@ -192,13 +193,15 @@ impl Cfg {
 
     /// Read the INI format file 'path' and create a ConfigHash from the matching entries in the
     /// definition file and update the 'current' field with value from 'path'.
-    fn update_cfg_from_defn<P: AsRef<Path>>(defn: ConfigHash, path: P) -> Option<ConfigHash> {
+    fn update_cfg_from_defn<P: AsRef<Path> + std::fmt::Display>(
+        defn: ConfigHash,
+        path: P,
+    ) -> Option<ConfigHash> {
         // Read existing configuration file
-        if let Ok(ini) = Ini::load_from_file(path) {
+        if let Ok(ini) = Self::read_cfg_file(path) {
             // Create new ConfigHash to hold configuration
             let mut cfg = ConfigHash::new();
-            let properties = ini.general_section();
-            for (k, v) in properties.iter() {
+            for (k, v) in ini.iter() {
                 let attr = defn.get(k);
                 if let Some(aref) = attr {
                     let mut a = aref.clone();
@@ -252,6 +255,30 @@ impl Cfg {
         attr2
     }
 
+    /// Read the configuration file at `path` and populate a IniHash with the
+    /// Properties from the general section
+    pub fn read_cfg_file<P: AsRef<Path> + std::fmt::Display>(path: P) -> Result<IniHash, CfgError> {
+        // Read existing configuration file
+        let f = Ini::load_from_file(&path);
+        match f {
+            Ok(ini) => {
+                // create new IniHash to hold .ini file contents
+                let mut cfg = IniHash::new();
+                // Get the general section properties
+                let properties = ini.general_section();
+                for (k, v) in properties.iter() {
+                    cfg.insert(k.to_string(), v.to_string());
+                }
+                // Return the IniHash
+                Ok(cfg)
+            }
+            Err(e) => {
+                error!("reading file {} as .ini failed", path);
+                Err(CfgError::Ini(e))
+            }
+        }
+    }
+
     /// Output the keys and current values of items to `path`
     ///
     /// If makeBackup is TRUE then a timestamped backup of the existing INI file is taken
@@ -297,6 +324,13 @@ mod test_cfg {
         canid=101
         node_number=5432
         start_event_id=2
+        node_mode=1
+        "#;
+
+    const BAD_CFG_DATA: &str = r#"
+        canid=101,
+        node_number=
+        start_event_id==2
         node_mode=1
         "#;
 
@@ -472,6 +506,60 @@ mod test_cfg {
         teardown_file(&defn_file);
         match good_result {
             Ok(_) => assert!(true),
+            Err(e) => {
+                error!("{}", e);
+                assert!(false);
+            }
+        }
+    }
+
+    #[test]
+    #[should_panic]
+    fn read_cfg_file_missing() {
+        let cfg_file = "tests/nonexistent_file.ini";
+        let _p = Cfg::read_cfg_file(cfg_file).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn read_cfg_file_not_valid() {
+        // Initialise Logger
+        init_logging();
+
+        let cfg_file = "scratch/malformed_cfg_file.ini";
+        setup_file(&cfg_file, BAD_CFG_DATA);
+        let bad_result = Cfg::read_cfg_file(&cfg_file);
+        teardown_file(&cfg_file);
+        match bad_result {
+            Ok(_) => assert!(false),
+            Err(e) => {
+                error!("{}", e);
+                assert!(true);
+            }
+        }
+    }
+
+    #[test]
+    fn read_cfg_file_validates() {
+        // Initialise Logger
+        init_logging();
+
+        let cfg_file = "scratch/good_cfg_file.ini";
+        setup_file(&cfg_file, CFG_DATA);
+        let good_result = Cfg::read_cfg_file(&cfg_file);
+        teardown_file(&cfg_file);
+        match good_result {
+            Ok(gr) => {
+                if gr.len() == 4 {
+                    assert!(true)
+                } else {
+                    assert!(
+                        false,
+                        "read_cfg_file_validates: expected 4 items, got {}",
+                        gr.len()
+                    );
+                }
+            }
             Err(e) => {
                 error!("{}", e);
                 assert!(false);
