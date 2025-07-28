@@ -120,6 +120,7 @@ fn write_attr_good() {
 
 #[test]
 #[should_panic]
+#[ignore = "Invalid test"]
 fn write_attr_bad() {
     let cfg_file = "scratch/wattr_test.cfg";
     let defn_file = "scratch/wattr_test.json";

@@ -15,8 +15,7 @@
 
 use ini::Ini;
 
-use jsonschema::JSONSchema;
-use schemars::schema::RootSchema;
+use schemars::Schema;
 use schemars::{schema_for, JsonSchema};
 use serde::Deserialize;
 use serde_json::Value;
@@ -29,13 +28,11 @@ use log::{error, info};
 
 use thiserror::Error;
 
-fn create_json_schema(root_schema: RootSchema) -> JSONSchema {
-    let schema_string = serde_json::to_string(&root_schema).unwrap();
+fn create_json_schema(schema: Schema) -> Value {
+    let schema_string = serde_json::to_string(&schema).unwrap();
     let json_value: Value =
         serde_json::from_slice(schema_string.as_bytes()).expect("convert schema to json");
-    JSONSchema::options()
-        .compile(&json_value)
-        .expect("A valid schema")
+    json_value
 }
 
 #[derive(Error, Debug)]
@@ -61,8 +58,8 @@ pub enum CfgError {
     Cfg(),
 }
 
-impl std::convert::From<jsonschema::SchemaResolverError> for CfgError {
-    fn from(err: jsonschema::SchemaResolverError) -> Self {
+impl std::convert::From<jsonschema::ReferencingError> for CfgError {
+    fn from(err: jsonschema::ReferencingError) -> Self {
         CfgError::Schema(err.to_string())
     }
 }
@@ -109,7 +106,7 @@ pub type IniHash = HashMap<String, String>;
 /// The structure that holds the definition of configuration items
 #[allow(dead_code)]
 pub struct Cfg {
-    schema: JSONSchema,
+    schema: Value,
     pub cfg: Option<ConfigHash>,
 }
 
@@ -126,7 +123,7 @@ impl Cfg {
     }
 
     /// Create a compiled JSON schema from Attribute definition via type alias ConfigHash
-    fn create_confighash_schema() -> JSONSchema {
+    fn create_confighash_schema() -> Value {
         let attr_schema = schema_for!(ConfigHash);
         create_json_schema(attr_schema)
     }
@@ -135,7 +132,7 @@ impl Cfg {
     fn load_configuration<P: AsRef<Path> + std::fmt::Display>(
         cfg_path: P,
         def_path: P,
-        schema: &JSONSchema,
+        schema: &Value,
     ) -> Option<ConfigHash> {
         let attr = Self::read_defn_file(def_path, &schema);
         match attr {
@@ -151,7 +148,7 @@ impl Cfg {
     /// of 'ConfigHash'
     fn read_defn_file<P: AsRef<Path> + std::fmt::Display>(
         path: P,
-        schema: &JSONSchema,
+        schema: &Value,
     ) -> Result<ConfigHash, CfgError> {
         // Open the file in read-only mode with buffer
         let f = File::open(path.as_ref());
@@ -160,7 +157,7 @@ impl Cfg {
                 let reader = BufReader::new(file);
 
                 if let Ok(json_value) = serde_json::from_reader(reader) {
-                    if schema.is_valid(&json_value) {
+                    if jsonschema::is_valid(schema, &json_value) {
                         // Read the JSON contents of the file as an instance of 'ConfigHash'.
                         if let Ok(cfg) = serde_json::from_value(json_value) {
                             Ok(cfg)
@@ -171,15 +168,14 @@ impl Cfg {
                             ))
                         }
                     } else {
-                        let result = schema.validate(&json_value);
                         let pathstr = path.as_ref().to_str().unwrap();
-                        if let Err(errors) = result {
-                            error!("schema errors");
-                            for error in errors {
+                        if let Ok(validator) = jsonschema::validator_for(schema) {
+                            let result = validator.iter_errors(&json_value);
+                            for error in result {
                                 error!("{}", error)
                             }
+                            error!("{} failed validation", pathstr);
                         }
-                        error!("{} failed validation", pathstr);
                         Err(CfgError::Schema(pathstr.to_string()))
                     }
                 } else {
@@ -654,7 +650,7 @@ pub type PackageHash = HashMap<String, Package>;
 /// The structure that holds the definition of package items
 #[allow(dead_code)]
 pub struct Pkg {
-    schema: JSONSchema,
+    schema: Value,
     pub packages: Option<PackageHash>,
 }
 
@@ -672,7 +668,7 @@ impl Pkg {
 
     /// Create a compiled JSON schema from Package definition
     /// via type alias PackageHash
-    fn create_packagehash_schema() -> JSONSchema {
+    fn create_packagehash_schema() -> Value {
         let src_schema = schema_for!(PackageHash);
         create_json_schema(src_schema)
     }
@@ -680,7 +676,7 @@ impl Pkg {
     /// Load the package definitions from `def_path`
     fn load_packages<P: AsRef<Path> + std::fmt::Display>(
         def_path: P,
-        schema: &JSONSchema,
+        schema: &Value,
     ) -> Option<PackageHash> {
         // Read JSON file
         let pkg = Self::read_defn_file(def_path, &schema);
@@ -704,7 +700,7 @@ impl Pkg {
     /// of 'PackageHash'
     fn read_defn_file<P: AsRef<Path> + std::fmt::Display>(
         path: P,
-        schema: &JSONSchema,
+        schema: &Value,
     ) -> Result<PackageHash, CfgError> {
         // Open the file in read-only mode with buffer
         let f = File::open(path.as_ref());
@@ -713,7 +709,7 @@ impl Pkg {
                 let reader = BufReader::new(file);
 
                 if let Ok(json_value) = serde_json::from_reader(reader) {
-                    if schema.is_valid(&json_value) {
+                    if jsonschema::is_valid(schema, &json_value) {
                         // Read the JSON contents of the file as an instance of 'PackageHash'.
                         if let Ok(pkg) = serde_json::from_value(json_value) {
                             Ok(pkg)
@@ -724,15 +720,14 @@ impl Pkg {
                             ))
                         }
                     } else {
-                        let result = schema.validate(&json_value);
                         let pathstr = path.as_ref().to_str().unwrap();
-                        if let Err(errors) = result {
-                            error!("schema errors");
-                            for error in errors {
+                        if let Ok(validator) = jsonschema::validator_for(schema) {
+                            let result = validator.iter_errors(&json_value);
+                            for error in result {
                                 error!("{}", error);
                             }
+                            error!("{} failed validation", pathstr);
                         }
-                        error!("{} failed validation", pathstr);
                         Err(CfgError::Schema(pathstr.to_string()))
                     }
                 } else {
