@@ -642,6 +642,9 @@ pub struct Package {
     pub ini_file: String,
     /// Name of Attribute Definition File
     pub json_file: String,
+    /// Name of the name of the service to be restarted systenctl when the
+    /// package is updated
+    pub service_name: Option<String>,
 }
 
 /// Type alias based on a HashMap

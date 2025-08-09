@@ -1,6 +1,6 @@
 [package]
 name = "canpi-config"
-version = "0.1.6"
+version = "0.1.7"
 authors = ["Mark Thornber <mark.thornber@merg.org.uk>"]
 edition = "2021"
 
