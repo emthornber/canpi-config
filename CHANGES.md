@@ -1,5 +1,11 @@
 # Change Log
 
+canpi-config (0.1.7) bookworm; urgency=low
+
+- Added optional service_name field to Package structure
+
+-- Mark Thornber <mark.thornber@gmail.com> Sat, 09 Aug 2025 12:49:18 +0100
+
 canpi-config (0.1.6) bookworm; urgency=low
 
 - Updated dependencies
