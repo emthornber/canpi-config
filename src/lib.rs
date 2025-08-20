@@ -785,10 +785,23 @@ mod test_pkg {
 
     #[test]
     fn read_defn_file_validates() {
+        // Initialise Logger
+        init_logging();
+
         let schema = Pkg::create_packagehash_schema();
-        let json_file = "tests/test_pkg.json";
+        let json_file = "tests/test2_pkg.json";
         let p = Pkg::read_defn_file(json_file, &schema).unwrap();
         assert_eq!(p.len(), 2);
+        for (key, package) in p.iter() {
+            info!(
+                "Package: {} - {}, {}, {}, {}",
+                key,
+                package.cfg_path,
+                package.ini_file,
+                package.json_file,
+                package.service_name.as_deref().unwrap_or("None")
+            );
+        }
     }
 
     #[test]

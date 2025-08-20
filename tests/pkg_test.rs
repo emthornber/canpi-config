@@ -23,7 +23,7 @@ fn pkg_new2() {
             assert!(p.contains_key("CANPiServer"));
             let canpi_pkg = p.get("CANPiServer").unwrap();
             if let Some(sn) = &canpi_pkg.service_name {
-                assert_eq!(sn, "canpid.service");
+                assert_eq!(sn, "canpid");
             } else {
                 assert!(false, "Service name should not be None");
             }

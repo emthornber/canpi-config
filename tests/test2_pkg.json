@@ -8,6 +8,6 @@
         "cfg_path": "tests",
         "ini_file": "canpi_example.cfg",
         "json_file": "canpi_example.json",
-        "service_name": "canpid.service"
+        "service_name": "canpid"
     }
 }
