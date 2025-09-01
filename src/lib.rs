@@ -26,6 +26,7 @@ use backitup::backup;
 
 use log::{error, info};
 
+use slugrs::slugify;
 use thiserror::Error;
 
 fn create_json_schema(schema: Schema) -> Value {
@@ -105,6 +106,7 @@ pub type IniHash = HashMap<String, String>;
 
 /// The structure that holds the definition of configuration items
 #[allow(dead_code)]
+#[derive(Clone)]
 pub struct Cfg {
     schema: Value,
     pub cfg: Option<ConfigHash>,
@@ -642,7 +644,9 @@ pub struct Package {
     pub ini_file: String,
     /// Name of Attribute Definition File
     pub json_file: String,
-    /// Name of the name of the service to be restarted systenctl when the
+    /// Title of the package to be displayed on the webpage
+    pub title: Option<String>,
+    /// Name of the name of the service to be restarted by systemctl when the
     /// package is updated
     pub service_name: Option<String>,
 }
@@ -686,7 +690,7 @@ impl Pkg {
         match pkg {
             Ok(packages) => {
                 if packages.len() > 0 {
-                    Some(packages)
+                    Some(Self::slugify_keys(packages))
                 } else {
                     None
                 }
@@ -740,6 +744,21 @@ impl Pkg {
             }
             Err(e) => Err(CfgError::Io(e)),
         }
+    }
+
+    /// Slugify the package keys and update the 'title' field, if it is None,
+    /// with the original key.
+    fn slugify_keys(mut pkg: PackageHash) -> PackageHash {
+        let mut pkg2: PackageHash = HashMap::new();
+        for (k, v) in pkg.drain() {
+            let sk = slugify(&k);
+            let mut p = v.clone();
+            if p.title.is_none() {
+                p.title = Some(k);
+            }
+            pkg2.insert(sk, p);
+        }
+        pkg2
     }
 }
 

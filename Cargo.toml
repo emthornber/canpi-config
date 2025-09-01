@@ -1,6 +1,6 @@
 [package]
 name = "canpi-config"
-version = "0.1.7"
+version = "0.1.8"
 authors = ["Mark Thornber <mark.thornber@merg.org.uk>"]
 edition = "2021"
 
@@ -27,7 +27,7 @@ schemars = "1.0.4"
 dotenv = "0.15.0"
 # .ini file library
 #configparser = "3.0.0"
-rust-ini = "0.21.2"
+rust-ini = "0.21.1"
 # Error handling
 thiserror = "2.0.12"
 anyhow = "1.0.98"
@@ -36,3 +36,4 @@ log = "0.4.27"
 backitup = "0.1.2"
 glob = "0.3.2"
 env_logger = "0.11.8"
+slugrs = "0.5.0"

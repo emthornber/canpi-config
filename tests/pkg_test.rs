@@ -1,13 +1,33 @@
 use canpi_config::Pkg;
 
 #[test]
-fn pkg_new() {
+fn pkg_new1() {
     let def_path = "tests/test_pkg.json";
     let pkg = Pkg::new(def_path);
     match pkg.packages {
         Some(p) => {
             assert_eq!(p.len(), 2);
-            assert!(p.contains_key("AutoHotSpot"));
+            assert!(p.contains_key("auto-wap"));
+        }
+        None => assert!(false, "Packages should not be None"),
+    }
+}
+
+#[test]
+fn pkg_new1_list() {
+    let def_path = "tests/test_pkg.json";
+    let pkg = Pkg::new(def_path);
+    match pkg.packages {
+        Some(p) => {
+            assert_eq!(p.len(), 2);
+            let keys: Vec<&String> = p.keys().collect();
+            assert!(keys.contains(&&"auto-wap".to_string()));
+            let autowap_pkg = p.get("auto-wap").unwrap();
+            if let Some(t) = &autowap_pkg.title {
+                assert_eq!(t, "Hotspot");
+            } else {
+                assert!(false, "Title should not be None");
+            }
         }
         None => assert!(false, "Packages should not be None"),
     }
@@ -20,8 +40,13 @@ fn pkg_new2() {
     match pkg.packages {
         Some(p) => {
             assert_eq!(p.len(), 2);
-            assert!(p.contains_key("CANPiServer"));
-            let canpi_pkg = p.get("CANPiServer").unwrap();
+            assert!(p.contains_key("canpi-server"));
+            let canpi_pkg = p.get("canpi-server").unwrap();
+            if let Some(t) = &canpi_pkg.title {
+                assert_eq!(t, "CANPi Server");
+            } else {
+                assert!(false, "Title should not be None");
+            }
             if let Some(sn) = &canpi_pkg.service_name {
                 assert_eq!(sn, "canpid");
             } else {
