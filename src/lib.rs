@@ -106,7 +106,7 @@ pub type IniHash = HashMap<String, String>;
 
 /// The structure that holds the definition of configuration items
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Cfg {
     schema: Value,
     pub cfg: Option<ConfigHash>,
@@ -635,7 +635,7 @@ mod test_cfg {
 /// Package Definitions
 ///
 
-#[derive(Clone, Deserialize, Debug, JsonSchema)]
+#[derive(Clone, Deserialize, Debug, JsonSchema, PartialEq, PartialOrd)]
 /// Definition of a Package
 pub struct Package {
     /// Path of package directory
