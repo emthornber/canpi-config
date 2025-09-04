@@ -64,12 +64,12 @@ fn pkg_new3() {
     match pkg.packages {
         Some(p) => {
             assert_eq!(p.len(), 2);
-            assert!(p.contains_key("AutoHotSpot"));
-            let canpi_pkg = p.get("AutoHotSpot").unwrap();
+            assert!(p.contains_key("auto-hotspot"));
+            let canpi_pkg = p.get("auto-hotspot").unwrap();
             if let Some(_sn) = &canpi_pkg.service_name {
-                assert!(false, "Service name should be None for AutoHotSpot");
+                assert!(false, "Service name should be None for 'Auto HotSpot'");
             } else {
-                assert!(true, "Service name not defined for AutoHotSpot");
+                assert!(true, "Service name not defined for 'Auto HotSpot'");
             }
         }
         None => assert!(false, "Packages should not be None"),
