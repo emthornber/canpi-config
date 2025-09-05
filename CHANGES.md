@@ -1,5 +1,11 @@
 # Change Log
 
+canpi-config (0.1.8) bookworm; urgency=low
+
+- Improved Pkg test suite
+
+-- Mark Thornber <mark.thornber@gmail.com> Fri, 05 Sep 2025 10:37:29 +0100
+
 canpi-config (0.1.7) bookworm; urgency=low
 
 - Added optional service_name field to Package structure

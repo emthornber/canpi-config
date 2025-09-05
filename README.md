@@ -1,4 +1,5 @@
 # canpi-config
+
 Rust library to handle configuration files for CANPiCap and CANPiZero
 
 This crate provides functionality to read and write the canpi server configuration files
