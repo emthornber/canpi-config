@@ -1,6 +1,6 @@
 [package]
 name = "canpi-config"
-version = "0.1.8"
+version = "0.1.9"
 authors = ["Mark Thornber <mark.thornber@merg.org.uk>"]
 edition = "2021"
 
@@ -22,7 +22,7 @@ serde_json = "1.0.141"
 serde_test = "1.0.130"
 # JSON libraries
 jsonschema = "0.31.0"
-schemars = "1.0.4"
+schemars = { version = "1.0.4", features = ["either1"] }
 # Environment variable access libraries
 dotenv = "0.15.0"
 # .ini file library
@@ -37,3 +37,4 @@ backitup = "0.1.2"
 glob = "0.3.2"
 env_logger = "0.11.8"
 slugrs = "0.5.0"
+either = { version = "1.15.0", features = ["serde"] }

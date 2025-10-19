@@ -1,5 +1,5 @@
 use canpi_config::ActionBehaviour;
-use canpi_config::*;
+use canpi_config::AttributeFormat;
 use dotenv::dotenv;
 use std::fs::File;
 use std::io::Write;
@@ -103,7 +103,7 @@ fn write_attr_good() {
         tooltip: "new tooltip".to_string(),
         current: "1".to_string(),
         default: "2".to_string(),
-        format: "[1-8]".to_string(),
+        format: [Left("[1-8]".to_string()), Right()],
         action: ActionBehaviour::Hide,
     };
     cfg.write_attribute("start_event_id".to_string(), &new_start_event_id)

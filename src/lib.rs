@@ -15,6 +15,7 @@
 
 use ini::Ini;
 
+use either::*;
 use schemars::Schema;
 use schemars::{schema_for, JsonSchema};
 use serde::Deserialize;
@@ -83,6 +84,12 @@ pub enum ActionBehaviour {
     Hide,
 }
 
+#[derive(Clone, Deserialize, Debug, JsonSchema, PartialEq)]
+/// Either type to define the format of an attribute
+pub struct AttributeFormat {
+    pub data: Either<String, Vec<String>>,
+}
+
 #[derive(Clone, Deserialize, Debug, JsonSchema)]
 /// Definition of an attribute
 pub struct Attribute {
@@ -94,8 +101,10 @@ pub struct Attribute {
     pub current: String,
     /// Default value of attribute
     pub default: String,
-    /// Regular expression to validate user input
-    pub format: String,
+    /// Either structure
+    /// Left is regular expression to validate user input
+    /// Right is list of valid options for user selection
+    pub format: Either<String, Vec<String>>,
     /// How the attribute is presented on a webpage
     pub action: ActionBehaviour,
 }
