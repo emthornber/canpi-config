@@ -84,11 +84,11 @@ pub enum ActionBehaviour {
     Hide,
 }
 
-#[derive(Clone, Deserialize, Debug, JsonSchema, PartialEq)]
 /// Either type to define the format of an attribute
-pub struct AttributeFormat {
-    pub data: Either<String, Vec<String>>,
-}
+/// Either structure
+/// Left is regular expression to validate user input
+/// Right is list of valid options for user selection
+pub type AttributeFormat = Either<String, Vec<String>>;
 
 #[derive(Clone, Deserialize, Debug, JsonSchema)]
 /// Definition of an attribute
@@ -101,10 +101,7 @@ pub struct Attribute {
     pub current: String,
     /// Default value of attribute
     pub default: String,
-    /// Either structure
-    /// Left is regular expression to validate user input
-    /// Right is list of valid options for user selection
-    pub format: Either<String, Vec<String>>,
+    pub format: AttributeFormat,
     /// How the attribute is presented on a webpage
     pub action: ActionBehaviour,
 }
@@ -348,15 +345,15 @@ mod test_cfg {
                       "tooltip": "The CAN Id used by the CAN Pi CAP/Zero on the CBUS",
                       "current": "100",
                       "default": "100",
-                      "format": "[0-9]{1,4}",
+                      "format": { "Left": "[0-9]{1,4}" },
                       "action": "Display"
                   },
                   "node_number" : {
                       "prompt": "Node Number",
-                      "tooltip": "Module Node Number - change your peril",
+                      "tooltip": "Module Node Number - change at your peril",
                       "current": "4321",
                       "default": "4321",
-                      "format": "[0-9]{1,4}",
+                      "format": { "Left": "[0-9]{1,4}" },
                       "action": "Display"
                   },
                   "start_event_id" : {
@@ -364,7 +361,7 @@ mod test_cfg {
                       "tooltip": "The event that will be generated when the ED and GridConnect services start (ON) and stop (OFF)",
                       "current": "1",
                       "default": "1",
-                      "format": "[0-9]{1,2}",
+                      "format": { "Left": "[0-9]{1,2}" },
                       "action": "Edit"
                   },
                   "node_mode" : {
@@ -372,7 +369,7 @@ mod test_cfg {
                       "tooltip": "",
                       "current": "0",
                       "default": "0",
-                      "format": "[0-9]{1,2}",
+                      "format": { "Left": "[0-9]{1,2}" },
                       "action": "Hide"
                   }
         }"#;
@@ -384,7 +381,7 @@ mod test_cfg {
                       "tooltip": "The CAN Id used by the CAN Pi CAP/Zero on the CBUS",
                       "current": "100",
                       "default": "100",
-                      "format": "[0-9]{1,4}",
+                      "format": { "Left": "[0-9]{1,4} },
                       "action": "Display"
                   },
                   "node_number" : {
@@ -392,7 +389,7 @@ mod test_cfg {
                       "tooltip": "Module Node Number - change your peril",
                       "current": "4321",
                       "default": "4321",
-                      "format": "[0-9]{1,4}",
+                      "format": { "Left": "[0-9]{1,4} },
                       "action": "Display"
                   },
                   "start_event_id" : {
@@ -400,14 +397,14 @@ mod test_cfg {
                       "tooltip": "The event that will be generated when the ED and GridConnect services start (ON) and stop (OFF)",
                       "current": "1",
                       "default": "1",
-                      "format": "[0-9]{1,2}",
+                      "format": { "Left": "[0-9]{1,2} },
                       "action": "Edit"
                   },
                   "node_mode" : {
                       "tooltip": "",
                       "current": "0",
                       "default": "0",
-                      "format": "[0-9]{1,2}",
+                      "format": { "Left": "[0-9]{1,2} },
                       "action": "Hide"
                   }
         }"#;
