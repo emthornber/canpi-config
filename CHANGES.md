@@ -1,5 +1,16 @@
 # Change Log
 
+canpi-config (0.1.9) bookworm; urgency=low
+
+- The 'format' field in the Attributes structure now has a data type of an
+Either enum.  
+The Left entry is a String intended to hold a Regexp to validate
+the user input.  
+The Right entry is a Vector of Strings to be used in a Drop Down
+List (HTML <select> tag).
+
+-- Mark Thornber <mark.thornber@gmail.com> Mon, 20 Oct 2025 14:13:25 +0100
+
 canpi-config (0.1.8) bookworm; urgency=low
 
 - Improved Pkg test suite
