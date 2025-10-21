@@ -84,8 +84,8 @@ pub enum ActionBehaviour {
     Hide,
 }
 
-/// Either type to define the format of an attribute
-/// Either structure
+/// EITHER type to define the format of an attribute
+/// Either structure is :-
 /// Left is regular expression to validate user input
 /// Right is list of valid options for user selection
 pub type AttributeFormat = Either<String, Vec<String>>;
