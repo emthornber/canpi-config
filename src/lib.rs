@@ -15,7 +15,6 @@
 
 use ini::Ini;
 
-use either::*;
 use schemars::Schema;
 use schemars::{schema_for, JsonSchema};
 use serde::Deserialize;
@@ -88,7 +87,12 @@ pub enum ActionBehaviour {
 /// Either structure is :-
 /// Left is regular expression to validate user input
 /// Right is list of valid options for user selection
-pub type AttributeFormat = Either<String, Vec<String>>;
+#[derive(Clone, Deserialize, Debug, JsonSchema, PartialEq)]
+#[serde(untagged)]
+pub enum AttributeFormat {
+    RegExp(String),
+    Vector(Vec<String>),
+}
 
 #[derive(Clone, Deserialize, Debug, JsonSchema)]
 /// Definition of an attribute
@@ -345,7 +349,7 @@ mod test_cfg {
                       "tooltip": "The CAN Id used by the CAN Pi CAP/Zero on the CBUS",
                       "current": "100",
                       "default": "100",
-                      "format": { "Left": "[0-9]{1,4}" },
+                      "format": "[0-9]{1,4}",
                       "action": "Display"
                   },
                   "node_number" : {
@@ -353,7 +357,7 @@ mod test_cfg {
                       "tooltip": "Module Node Number - change at your peril",
                       "current": "4321",
                       "default": "4321",
-                      "format": { "Left": "[0-9]{1,4}" },
+                      "format": "[0-9]{1,4}",
                       "action": "Display"
                   },
                   "start_event_id" : {
@@ -361,7 +365,7 @@ mod test_cfg {
                       "tooltip": "The event that will be generated when the ED and GridConnect services start (ON) and stop (OFF)",
                       "current": "1",
                       "default": "1",
-                      "format": { "Left": "[0-9]{1,2}" },
+                      "format": "[0-9]{1,2}",
                       "action": "Edit"
                   },
                   "node_mode" : {
@@ -369,7 +373,7 @@ mod test_cfg {
                       "tooltip": "",
                       "current": "0",
                       "default": "0",
-                      "format": { "Left": "[0-9]{1,2}" },
+                      "format": "[0-9]{1,2}",
                       "action": "Hide"
                   }
         }"#;
@@ -381,7 +385,7 @@ mod test_cfg {
                       "tooltip": "The CAN Id used by the CAN Pi CAP/Zero on the CBUS",
                       "current": "100",
                       "default": "100",
-                      "format": { "Left": "[0-9]{1,4} },
+                      "format": "[0-9]{1,4},
                       "action": "Display"
                   },
                   "node_number" : {
@@ -389,7 +393,7 @@ mod test_cfg {
                       "tooltip": "Module Node Number - change your peril",
                       "current": "4321",
                       "default": "4321",
-                      "format": { "Left": "[0-9]{1,4} },
+                      "format": "[0-9]{1,4},
                       "action": "Display"
                   },
                   "start_event_id" : {
@@ -397,14 +401,14 @@ mod test_cfg {
                       "tooltip": "The event that will be generated when the ED and GridConnect services start (ON) and stop (OFF)",
                       "current": "1",
                       "default": "1",
-                      "format": { "Left": "[0-9]{1,2} },
+                      "format": "[0-9]{1,2},
                       "action": "Edit"
                   },
                   "node_mode" : {
                       "tooltip": "",
                       "current": "0",
                       "default": "0",
-                      "format": { "Left": "[0-9]{1,2} },
+                      "format": "[0-9]{1,2},
                       "action": "Hide"
                   }
         }"#;
@@ -454,6 +458,7 @@ mod test_cfg {
         match a {
             Ok(a) => {
                 info!("Attribute is {} ({})", a.prompt, a.tooltip);
+                info!("'format' Attribute is {:?}", a.format);
                 assert_eq!(a.action, ActionBehaviour::Display);
             }
             Err(e) => error!("{}: Failed to deserialize", e),

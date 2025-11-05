@@ -1,6 +1,6 @@
+use canpi_config::AttributeFormat::RegExp;
 use canpi_config::*;
 use dotenv::dotenv;
-use either::{Left, Right};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -20,7 +20,7 @@ const DEFN_DATA: &str = r#"
                       "tooltip": "The CAN Id used by the CAN Pi CAP/Zero on the CBUS",
                       "current": "100",
                       "default": "100",
-                      "format": { "Left": "[0-9]{1,4}" },
+                      "format": "[0-9]{1,4}",
                       "action": "Display"
                   },
                   "node_number" : {
@@ -28,7 +28,7 @@ const DEFN_DATA: &str = r#"
                       "tooltip": "Module Node Number - change your peril",
                       "current": "4321",
                       "default": "4321",
-                      "format": { "Left": "[0-9]{1,4}" },
+                      "format": "[0-9]{1,4}",
                       "action": "Display"
                   },
                   "start_event_id" : {
@@ -36,7 +36,7 @@ const DEFN_DATA: &str = r#"
                       "tooltip": "The event that will be generated when the ED and GridConnect services start (ON) and stop (OFF)",
                       "current": "1",
                       "default": "1",
-                      "format": { "Left": "[0-9]{1,2}" },
+                      "format": "[0-9]{1,2}",
                       "action": "Edit"
                   },
                   "node_mode" : {
@@ -44,7 +44,7 @@ const DEFN_DATA: &str = r#"
                       "tooltip": "",
                       "current": "0",
                       "default": "0",
-                      "format": { "Left": "[0-9]{1,2}" },
+                      "format": "[0-9]{1,2}",
                       "action": "Hide"
                   }
         }"#;
@@ -103,7 +103,7 @@ fn write_attr_good() {
         tooltip: "new tooltip".to_string(),
         current: "1".to_string(),
         default: "2".to_string(),
-        format: Left("[1-8]".to_string()),
+        format: RegExp("[1-8]".to_string()),
         action: ActionBehaviour::Hide,
     };
     cfg.write_attribute("start_event_id".to_string(), &new_start_event_id)
@@ -130,7 +130,7 @@ fn write_attr_bad() {
         tooltip: "new tooltip".to_string(),
         current: "1".to_string(),
         default: "2".to_string(),
-        format: Left("[1-8]".to_string()),
+        format: RegExp("[1-8]".to_string()),
         action: ActionBehaviour::Hide,
     };
     cfg.write_attribute("start_event_id".to_string(), &new_start_event_id)

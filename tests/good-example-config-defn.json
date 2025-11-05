@@ -4,9 +4,7 @@
     "tooltip": "The CAN Id used by the CAN Pi CAP/Zero on the CBUS",
     "current": "100",
     "default": "100",
-    "format": {
-      "Left": "[0-9]{1,4}"
-    },
+    "format": "[0-9]{1,4}",
     "action": "Display"
   },
   "node_number": {
@@ -14,9 +12,7 @@
     "tooltip": "Module Node Number - change at your peril",
     "current": "4321",
     "default": "4321",
-    "format": {
-      "Left": "[0-9]{1,4}"
-    },
+    "format": "[0-9]{1,4}",
     "action": "Display"
   },
   "start_event_id": {
@@ -24,9 +20,7 @@
     "tooltip": "The event that will be generated when the ED and GridConnect services start (ON) and stop (OFF)",
     "current": "1",
     "default": "1",
-    "format": {
-      "Left": "[0-9]{1,2}"
-    },
+    "format": "[0-9]{1,2}",
     "action": "Edit"
   },
   "node_mode": {
@@ -34,9 +28,7 @@
     "tooltip": "",
     "current": "0",
     "default": "0",
-    "format": {
-      "Left": "[0-9]{1}"
-    },
+    "format": "[0-9]{1}",
     "action": "Hide"
   },
   "can_grid": {
@@ -44,9 +36,7 @@
     "tooltip": "Enter Y(es) or N(o)",
     "current": "Y",
     "default": "Y",
-    "format": {
-      "Left": "[Yy]|[Nn]"
-    },
+    "format": "[Yy]|[Nn]",
     "action": "Hide"
   },
   "edserver": {
@@ -54,9 +44,7 @@
     "tooltip": "Enter Y(es) or N(o)",
     "current": "Y",
     "default": "Y",
-    "format": {
-      "Left": "[Yy]|[Nn]"
-    },
+    "format": "[Yy]|[Nn]",
     "action": "Hide"
   },
   "candevice": {
@@ -64,9 +52,7 @@
     "tooltip": "",
     "current": "can0",
     "default": "can0",
-    "format": {
-      "Left": "[[:alnum:]]{4,}"
-    },
+    "format": "[[:alnum:]]{4,}",
     "action": "Hide"
   },
   "cangrid_port": {
@@ -74,9 +60,7 @@
     "tooltip": "TCP port that the GridConnect service listens on",
     "current": "5550",
     "default": "5550",
-    "format": {
-      "Left": "[0-9]{4}"
-    },
+    "format": "[0-9]{4}",
     "action": "Edit"
   },
   "create_log_file": {
@@ -84,9 +68,7 @@
     "tooltip": "",
     "current": "0",
     "default": "0",
-    "format": {
-      "Left": "[0-9]{1}"
-    },
+    "format": "[0-9]{1}",
     "action": "Hide"
   },
   "fn_momentary": {
@@ -94,9 +76,7 @@
     "tooltip": "",
     "current": "0",
     "default": "0",
-    "format": {
-      "Left": "[0-9]{1}"
-    },
+    "format": "[0-9]{1}",
     "action": "Hide"
   },
   "button_pin": {
@@ -104,9 +84,7 @@
     "tooltip": "",
     "current": "17",
     "default": "17",
-    "format": {
-      "Left": "[0-9]{2}"
-    },
+    "format": "[0-9]{2}",
     "action": "Display"
   },
   "green_led_pin": {
@@ -114,9 +92,7 @@
     "tooltip": "",
     "current": "24",
     "default": "24",
-    "format": {
-      "Left": "[0-9]{2}"
-    },
+    "format": "[0-9]{2}",
     "action": "Display"
   },
   "yellow_led_pin": {
@@ -124,9 +100,7 @@
     "tooltip": "",
     "current": "23",
     "default": "23",
-    "format": {
-      "Left": "[0-9]{2}"
-    },
+    "format": "[0-9]{2}",
     "action": "Display"
   },
   "red_led_pin": {
@@ -134,9 +108,7 @@
     "tooltip": "",
     "current": "22",
     "default": "22",
-    "format": {
-      "Left": "[0-9]{2}"
-    },
+    "format": "[0-9]{2}",
     "action": "Display"
   },
   "logappend": {
@@ -144,9 +116,7 @@
     "tooltip": "",
     "current": "0",
     "default": "0",
-    "format": {
-      "Left": "[0-9]{1}"
-    },
+    "format": "[0-9]{1}",
     "action": "Hide"
   },
   "logfile": {
@@ -154,9 +124,7 @@
     "tooltip": "",
     "current": "0",
     "default": "0",
-    "format": {
-      "Left": "[0-9]{1}"
-    },
+    "format": "[0-9]{1}",
     "action": "Hide"
   },
   "loglevel": {
@@ -164,13 +132,11 @@
     "tooltip": "Levels are INFO, WARN, DEBUG in increasing verboseness",
     "current": "INFO",
     "default": "INFO",
-    "format": {
-      "Right": [
-        "INFO",
-        "WARN",
-        "DEBUG"
-      ]
-    },
+    "format": [
+      "INFO",
+      "WARN",
+      "DEBUG"
+    ],
     "action": "Edit"
   },
   "service_name": {
@@ -178,9 +144,7 @@
     "tooltip": "",
     "current": "0",
     "default": "0",
-    "format": {
-      "Left": "[0-9]{1}"
-    },
+    "format": "[0-9]{1}",
     "action": "Hide"
   },
   "tcpport": {
@@ -188,9 +152,7 @@
     "tooltip": "TCP port the Engine driver throttle service listens on",
     "current": "5555",
     "default": "5555",
-    "format": {
-      "Left": "[0-9]{4}"
-    },
+    "format": "[0-9]{4}",
     "action": "Edit"
   },
   "turnout_file": {
@@ -198,9 +160,7 @@
     "tooltip": "",
     "current": "0",
     "default": "0",
-    "format": {
-      "Left": "[0-9]{1}"
-    },
+    "format": "[0-9]{1}",
     "action": "Hide"
   },
   "shutdown_code": {
@@ -208,9 +168,7 @@
     "tooltip": "",
     "current": "0",
     "default": "0",
-    "format": {
-      "Left": "[0-9]{1}"
-    },
+    "format": "[0-9]{1}",
     "action": "Hide"
   },
   "orphan_timeout": {
@@ -218,9 +176,7 @@
     "tooltip": "",
     "current": "0",
     "default": "0",
-    "format": {
-      "Left": "[0-9]{1}"
-    },
+    "format": "[0-9]{1}",
     "action": "Hide"
   },
   "ap_channel": {
@@ -228,9 +184,7 @@
     "tooltip": "WiFi Channel (1 - 13) used in AP mode",
     "current": "6",
     "default": "6",
-    "format": {
-      "Left": "[0-9]{1,2}"
-    },
+    "format": "[0-9]{1,2}",
     "action": "Edit"
   },
   "ap_mode": {
@@ -238,9 +192,7 @@
     "tooltip": "not needed",
     "current": "0",
     "default": "0",
-    "format": {
-      "Left": "[0-9]{1}"
-    },
+    "format": "[0-9]{1}",
     "action": "Hide"
   },
   "ap_no_password": {
@@ -248,9 +200,7 @@
     "tooltip": "",
     "current": "0",
     "default": "0",
-    "format": {
-      "Left": "[0-9]{1}"
-    },
+    "format": "[0-9]{1}",
     "action": "Hide"
   },
   "ap_password": {
@@ -258,9 +208,7 @@
     "tooltip": "",
     "current": "0",
     "default": "0",
-    "format": {
-      "Left": "[[:alnum:]]{1,}"
-    },
+    "format": "[[:alnum:]]{1,}",
     "action": "Hide"
   },
   "ap_ssid": {
@@ -268,9 +216,7 @@
     "tooltip": "SSID of Access Point network",
     "current": "HolywellTown",
     "default": "HolywellTown",
-    "format": {
-      "Left": "[[:alnum:]]{1,}"
-    },
+    "format": "[[:alnum:]]{1,}",
     "action": "Edit"
   },
   "router_ssid": {
@@ -278,9 +224,7 @@
     "tooltip": "SSID of default WiFi network to use",
     "current": "BTWholeHome-VFC",
     "default": "BTWholeHome-VFC",
-    "format": {
-      "Left": "[[:alnum:]]{1,}"
-    },
+    "format": "[[:alnum:]]{1,}",
     "action": "Edit"
   },
   "router_password": {
@@ -288,9 +232,7 @@
     "tooltip": "Password of default WiFi network to use",
     "current": "bKFcLGgAW6fV",
     "default": "bKFcLGgAW6fV",
-    "format": {
-      "Left": "[[:alnum:]]{1,}"
-    },
+    "format": "[[:alnum:]]{1,}",
     "action": "Hide"
   }
 }
