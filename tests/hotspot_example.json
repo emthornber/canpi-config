@@ -1,0 +1,42 @@
+{
+  "ap_channel": {
+    "prompt": "AP Channel",
+    "tooltip": "WiFi Channel (1 - 13) used in AP mode",
+    "current": "6",
+    "default": "6",
+    "format": {
+      "Left": "([1-9])|(1[0-3])"
+    },
+    "action": "Edit"
+  },
+  "ap_password": {
+    "prompt": "AP Password",
+    "tooltip": "Password of Access Point network",
+    "current": "MyLayout",
+    "default": "MyLayout",
+    "format": {
+      "Left": "[a-zA-Z0-9]{1,}"
+    },
+    "action": "Display"
+  },
+  "ap_ssid": {
+    "prompt": "AP SSID",
+    "tooltip": "SSID of Access Point network",
+    "current": "HolywellTown",
+    "default": "HolywellTown",
+    "format": {
+      "Left": "[a-zA-Z0-9]{1,}"
+    },
+    "action": "Edit"
+  },
+  "ap_network": {
+    "prompt": "AP Network address",
+    "tooltip": "IP address of Access Point network",
+    "current": "192.168.45.1",
+    "default": "192.168.45.1",
+    "format": {
+      "Left": "([0-9]{1,3}[.]){3}[0-9]{1,3}"
+    },
+    "action": "Edit"
+  }
+}

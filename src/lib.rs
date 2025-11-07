@@ -701,7 +701,7 @@ impl Pkg {
         match pkg {
             Ok(packages) => {
                 if packages.len() > 0 {
-                    Some(Self::slugify_keys(packages))
+                    Some(Self::validate_packages(packages))
                 } else {
                     None
                 }
@@ -757,17 +757,35 @@ impl Pkg {
         }
     }
 
+    /// Ignore package definitions where either the INI file or the JSON files
+    /// do not exist.
     /// Slugify the package keys and update the 'title' field, if it is None,
     /// with the original key.
-    fn slugify_keys(mut pkg: PackageHash) -> PackageHash {
+    fn validate_packages(mut pkg: PackageHash) -> PackageHash {
         let mut pkg2: PackageHash = HashMap::new();
         for (k, v) in pkg.drain() {
-            let sk = slugify(&k);
-            let mut p = v.clone();
-            if p.title.is_none() {
-                p.title = Some(k);
+            let json_file_path = format!("{}/{}", v.cfg_path, v.json_file);
+            let ini_file_path = format!("{}/{}", v.cfg_path, v.ini_file);
+            if Path::new(&json_file_path).exists() {
+                if Path::new(&ini_file_path).exists() {
+                    let sk = slugify(&k);
+                    let mut p = v.clone();
+                    if p.title.is_none() {
+                        p.title = Some(k);
+                    }
+                    pkg2.insert(sk, p);
+                } else {
+                    info!(
+                        "Package '{}' INI file '{}' missing - package ignored",
+                        k, ini_file_path
+                    );
+                }
+            } else {
+                info!(
+                    "Package '{}' JSON file '{}' missing - package ignored",
+                    k, json_file_path
+                );
             }
-            pkg2.insert(sk, p);
         }
         pkg2
     }
