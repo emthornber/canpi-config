@@ -32,8 +32,6 @@ rust-ini = "0.21.1"
 thiserror = "2.0.12"
 anyhow = "1.0.98"
 log = "0.4.27"
-# Create file backup
-backitup = "0.1.2"
 glob = "0.3.2"
 env_logger = "0.11.8"
 slugrs = "0.5.0"

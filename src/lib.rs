@@ -8,23 +8,29 @@
 //! if it exists, is read to update current value of the configuration items so the ConfigHash
 //! becomes the single source of truth.
 //!
-//! There is a function to write the ConfigHash current values as an INI file.
+//! There is a function to write the ConfigHash current values as an INI file.  It keeps keys it
+//! does not define and values changed by other programs, and replaces the file in one step so a
+//! power cut cannot leave it empty or part written.
 //
 //  30 November, 2021 - E M Thornber
 //
 
-use ini::Ini;
+use ini::{EscapePolicy, Ini};
 
 use schemars::Schema;
 use schemars::{schema_for, JsonSchema};
 use serde::Deserialize;
 use serde_json::Value;
 
-use std::{collections::HashMap, fs::File, io::BufReader, path::Path, string::String};
+use std::{
+    collections::{HashMap, HashSet},
+    fs::{self, File},
+    io::{BufReader, Write},
+    path::{Path, PathBuf},
+    string::String,
+};
 
-use backitup::backup;
-
-use log::{error, info};
+use log::{error, info, warn};
 
 use slugrs::slugify;
 use thiserror::Error;
@@ -57,6 +63,9 @@ pub enum CfgError {
     /// The error was caused by a lack of attribute definitions
     #[error("Cfg structure not properly initialised")]
     Cfg(),
+    /// The configuration file could not be read when it was loaded, so it is not overwritten
+    #[error("configuration file '{0}' could not be read when loaded, so it is not overwritten")]
+    Unreadable(String),
 }
 
 impl std::convert::From<jsonschema::ReferencingError> for CfgError {
@@ -120,6 +129,10 @@ pub type IniHash = HashMap<String, String>;
 pub struct Cfg {
     schema: Value,
     pub cfg: Option<ConfigHash>,
+    /// Keys whose attribute has been changed through `write_attribute`
+    edited: HashSet<String>,
+    /// The configuration file existed but could not be read when loaded
+    unreadable: bool,
 }
 
 impl Cfg {
@@ -130,8 +143,15 @@ impl Cfg {
     ///
     pub fn new<P: AsRef<Path> + std::fmt::Display>(cfg_path: P, def_path: P) -> Cfg {
         let schema = Self::create_confighash_schema();
+        // A file that exists but cannot be read must not later be overwritten with default values
+        let unreadable = cfg_path.as_ref().exists() && Self::read_cfg_file(&cfg_path).is_err();
         let cfg = Self::load_configuration(cfg_path, def_path, &schema);
-        Cfg { schema, cfg }
+        Cfg {
+            schema,
+            cfg,
+            edited: HashSet::new(),
+            unreadable,
+        }
     }
 
     /// Create a compiled JSON schema from Attribute definition via type alias ConfigHash
@@ -199,22 +219,20 @@ impl Cfg {
         }
     }
 
-    /// Read the INI format file 'path' and create a ConfigHash from the matching entries in the
-    /// definition file and update the 'current' field with value from 'path'.
+    /// Read the INI format file 'path' and update the 'current' field of each item in the
+    /// definition with the value from 'path'.  Items missing from 'path' keep the value from the
+    /// definition file.
     fn update_cfg_from_defn<P: AsRef<Path> + std::fmt::Display>(
         defn: ConfigHash,
         path: P,
     ) -> Option<ConfigHash> {
         // Read existing configuration file
         if let Ok(ini) = Self::read_cfg_file(path) {
-            // Create new ConfigHash to hold configuration
-            let mut cfg = ConfigHash::new();
+            // Every defined item, with the value from the definition file
+            let mut cfg = defn;
             for (k, v) in ini.iter() {
-                let attr = defn.get(k);
-                if let Some(aref) = attr {
-                    let mut a = aref.clone();
+                if let Some(a) = cfg.get_mut(k) {
                     a.current = v.to_string();
-                    cfg.insert(k.to_string(), a);
                 } else {
                     info!("Key '{}' not defined in configuration", k);
                 }
@@ -241,10 +259,9 @@ impl Cfg {
 
     /// Store an updated attribute definition for the configuration item defined by `key`
     pub fn write_attribute(&mut self, key: String, value: &Attribute) -> Result<(), CfgError> {
-        let cfg = self.cfg.clone();
-        if let Some(mut c) = cfg {
-            c.insert(key.to_string(), value.clone());
-            self.cfg = Some(c);
+        if let Some(c) = self.cfg.as_mut() {
+            c.insert(key.clone(), value.clone());
+            self.edited.insert(key);
             return Ok(());
         }
         Err(CfgError::Cfg())
@@ -289,7 +306,18 @@ impl Cfg {
 
     /// Output the keys and current values of items to `path`
     ///
-    /// If makeBackup is TRUE then a timestamped backup of the existing INI file is taken
+    /// The file at `path` is read again first, and only the items changed through
+    /// `write_attribute`, and items missing from the file, are written into it.  Keys this crate
+    /// does not define, and values another program (such as canpid) has changed since the
+    /// configuration was loaded, are kept.
+    ///
+    /// The file is replaced in one step: the new contents go to `<path>.tmp`, which is flushed to
+    /// disk and renamed over `path`, so a power cut leaves either the old file or the new one.
+    ///
+    /// If makeBackup is TRUE then a copy of the existing file is kept as `<path>.bak`
+    ///
+    /// Nothing is written if the configuration file could not be read when it was loaded, or if
+    /// the file at `path` cannot be read now, so such a file is not replaced by default values.
     ///
     /// Note: The format of the output file is INI with just a general section
     pub fn write_cfg_file<P: AsRef<Path>>(
@@ -297,26 +325,95 @@ impl Cfg {
         path: P,
         make_backup: Option<bool>,
     ) -> Result<(), CfgError> {
-        let c = &self.cfg;
-        if let Some(cfg) = c {
-            let mut ini = Ini::new();
-            for (k, v) in cfg {
-                ini.set_to(None::<String>, k.clone(), v.current.clone());
-            }
-            let mut do_backup: bool = false;
-            if let Some(b) = make_backup {
-                do_backup = b;
-            }
-            if do_backup {
-                match backup(&path) {
-                    Ok(backup_path) => info!("Backup created: {:?}", backup_path),
-                    Err(err) => error!("Failed to create backup: {:?}", err),
+        let path = path.as_ref();
+        let cfg = match &self.cfg {
+            Some(cfg) => cfg,
+            None => return Ok(()),
+        };
+        if self.unreadable {
+            error!(
+                "{} could not be read when loaded: not overwritten",
+                path.display()
+            );
+            return Err(CfgError::Unreadable(path.display().to_string()));
+        }
+        // Start from the file as it is now
+        let mut ini = if path.exists() {
+            match Ini::load_from_file(path) {
+                Ok(ini) => ini,
+                Err(e) => {
+                    error!(
+                        "reading file {} as .ini failed: not overwritten",
+                        path.display()
+                    );
+                    return Err(CfgError::Ini(e));
                 }
             }
-            ini.write_to_file(path)?;
+        } else {
+            Ini::new()
+        };
+        let mut keys: Vec<&String> = cfg.keys().collect();
+        keys.sort();
+        for k in keys {
+            if self.edited.contains(k) || ini.get_from(None::<String>, k).is_none() {
+                ini.set_to(None::<String>, k.clone(), cfg[k].current.clone());
+            }
         }
-        Ok(())
+        let mut contents: Vec<u8> = Vec::new();
+        ini.write_to_policy(&mut contents, EscapePolicy::Basics)?;
+
+        if make_backup.unwrap_or(false) && path.exists() {
+            let backup = sibling_path(path, ".bak");
+            match fs::copy(path, &backup).and_then(|_| File::open(&backup)?.sync_all()) {
+                Ok(()) => info!("Backup created: {:?}", backup),
+                Err(err) => error!("Failed to create backup: {:?}", err),
+            }
+        }
+
+        let tmp = sibling_path(path, ".tmp");
+        let result = write_and_replace(path, &tmp, &contents);
+        if result.is_err() {
+            let _ = fs::remove_file(&tmp);
+        }
+        result.map_err(CfgError::Io)
     }
+}
+
+/// `path` with `suffix` added to its file name
+fn sibling_path(path: &Path, suffix: &str) -> PathBuf {
+    let mut name = path.as_os_str().to_os_string();
+    name.push(suffix);
+    PathBuf::from(name)
+}
+
+/// Write `contents` to `tmp`, flush it to disk and rename it over `path`, keeping the permissions
+/// (and, on Unix, the owner) of an existing `path`.  Then flush the directory, so that the rename
+/// itself survives a power cut.
+fn write_and_replace(path: &Path, tmp: &Path, contents: &[u8]) -> std::io::Result<()> {
+    let mut f = File::create(tmp)?;
+    f.write_all(contents)?;
+    if let Ok(meta) = fs::metadata(path) {
+        f.set_permissions(meta.permissions())?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            if let Err(e) = std::os::unix::fs::fchown(&f, Some(meta.uid()), Some(meta.gid())) {
+                warn!("{}: owner of {} not kept", e, path.display());
+            }
+        }
+    }
+    f.sync_all()?;
+    drop(f);
+    fs::rename(tmp, path)?;
+    #[cfg(unix)]
+    {
+        let dir = match path.parent() {
+            Some(d) if !d.as_os_str().is_empty() => d,
+            _ => Path::new("."),
+        };
+        File::open(dir)?.sync_all()?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

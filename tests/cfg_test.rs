@@ -147,3 +147,142 @@ fn write_ini_file() {
     cfg.write_cfg_file(cfg_file, Some(true))
         .expect("Failed to write cfg file");
 }
+
+/// Load `cfg_data` with DEFN_DATA from files named after `name`, returning the Cfg and the paths
+fn load_test_files(name: &str, cfg_data: &str) -> (Cfg, String, String) {
+    let cfg_file = format!("scratch/{}.cfg", name);
+    let defn_file = format!("scratch/{}.json", name);
+    setup_file(&defn_file, DEFN_DATA);
+    setup_file(&cfg_file, cfg_data);
+    let cfg = Cfg::new(cfg_file.as_str(), defn_file.as_str());
+    (cfg, cfg_file, defn_file)
+}
+
+/// Set the current value of `key`, as the web app does
+fn set_current(cfg: &mut Cfg, key: &str, value: &str) {
+    let mut a = cfg
+        .read_attribute(key.to_string())
+        .expect("attribute missing")
+        .clone();
+    a.current = value.to_string();
+    cfg.write_attribute(key.to_string(), &a)
+        .expect("attribute write failed");
+}
+
+fn saved_value(cfg_file: &str, key: &str) -> Option<String> {
+    Cfg::read_cfg_file(cfg_file)
+        .expect("saved file not readable")
+        .get(key)
+        .cloned()
+}
+
+#[test]
+/// A key the definition does not cover is kept when the file is saved
+fn save_keeps_keys_not_defined() {
+    let (mut cfg, cfg_file, defn_file) = load_test_files(
+        "save_keep_test",
+        "canid=101\nnode_number=5432\nstart_event_id=2\nnode_mode=1\nlog_console=true\n",
+    );
+    set_current(&mut cfg, "start_event_id", "3");
+    cfg.write_cfg_file(&cfg_file, Some(false))
+        .expect("save failed");
+    assert_eq!(
+        saved_value(&cfg_file, "log_console").as_deref(),
+        Some("true")
+    );
+    assert_eq!(
+        saved_value(&cfg_file, "start_event_id").as_deref(),
+        Some("3")
+    );
+    assert_eq!(saved_value(&cfg_file, "canid").as_deref(), Some("101"));
+    teardown_file(&cfg_file);
+    teardown_file(&defn_file);
+}
+
+#[test]
+/// An item missing from the file is shown with the definition's value and written when saved
+fn save_writes_items_missing_from_file() {
+    let (cfg, cfg_file, defn_file) = load_test_files(
+        "save_missing_test",
+        "canid=101\nnode_number=5432\nstart_event_id=2\n",
+    );
+    let node_mode = cfg
+        .read_attribute("node_mode".to_string())
+        .expect("node_mode not loaded");
+    assert_eq!(node_mode.current, "0");
+    cfg.write_cfg_file(&cfg_file, Some(false))
+        .expect("save failed");
+    assert_eq!(saved_value(&cfg_file, "node_mode").as_deref(), Some("0"));
+    assert_eq!(saved_value(&cfg_file, "canid").as_deref(), Some("101"));
+    teardown_file(&cfg_file);
+    teardown_file(&defn_file);
+}
+
+#[test]
+/// A file that could not be read is not overwritten with the definition's values
+fn save_refuses_unreadable_file() {
+    let data = "canid=101\n[broken\nnode_number=5432\n";
+    let (mut cfg, cfg_file, defn_file) = load_test_files("save_unreadable_test", data);
+    set_current(&mut cfg, "start_event_id", "3");
+    assert!(cfg.write_cfg_file(&cfg_file, Some(true)).is_err());
+    assert_eq!(fs::read_to_string(&cfg_file).expect("file gone"), data);
+    assert!(!Path::new(&format!("{}.tmp", cfg_file)).exists());
+    assert!(!Path::new(&format!("{}.bak", cfg_file)).exists());
+    teardown_file(&cfg_file);
+    teardown_file(&defn_file);
+}
+
+#[test]
+/// A value changed in the file by another program after loading is kept, unless edited here
+fn save_keeps_changes_made_by_another_program() {
+    let (mut cfg, cfg_file, defn_file) = load_test_files("save_other_test", CFG_DATA);
+    set_current(&mut cfg, "start_event_id", "5");
+    // canpid changes the CAN Id after the web app has loaded the file
+    setup_file(
+        &cfg_file,
+        "canid=150\nnode_number=5432\nstart_event_id=2\nnode_mode=1\n",
+    );
+    cfg.write_cfg_file(&cfg_file, Some(false))
+        .expect("save failed");
+    assert_eq!(saved_value(&cfg_file, "canid").as_deref(), Some("150"));
+    assert_eq!(
+        saved_value(&cfg_file, "start_event_id").as_deref(),
+        Some("5")
+    );
+    teardown_file(&cfg_file);
+    teardown_file(&defn_file);
+}
+
+#[test]
+/// The file is replaced through a temporary file, and the backup is a copy of the old file
+fn save_replaces_file_and_keeps_backup() {
+    let old = "canid=101\nnode_number=5432\nstart_event_id=2\nnode_mode=1\n";
+    let (mut cfg, cfg_file, defn_file) = load_test_files("save_backup_test", old);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&cfg_file, fs::Permissions::from_mode(0o640)).expect("chmod failed");
+    }
+    set_current(&mut cfg, "start_event_id", "7");
+    cfg.write_cfg_file(&cfg_file, Some(true))
+        .expect("save failed");
+    let backup = format!("{}.bak", cfg_file);
+    assert_eq!(fs::read_to_string(&backup).expect("no backup"), old);
+    assert!(!Path::new(&format!("{}.tmp", cfg_file)).exists());
+    assert_eq!(
+        saved_value(&cfg_file, "start_event_id").as_deref(),
+        Some("7")
+    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = fs::metadata(&cfg_file)
+            .expect("no file")
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o640);
+    }
+    teardown_file(&backup);
+    teardown_file(&cfg_file);
+    teardown_file(&defn_file);
+}
